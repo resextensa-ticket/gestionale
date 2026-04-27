@@ -1732,7 +1732,7 @@ function openMappaTeatro(teatroId) {
     html += `<div style="margin-bottom:24px"><div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--testo-light);margin-bottom:12px">${s.nome}</div>`;
     (s.file || []).forEach(f => {
       html += `<div class="seat-row"><div class="seat-row-label">${f.fila}</div>`;
-      (f.posti || []).forEach(p => {
+      ([...(f.posti || [])].reverse()).forEach(p => {
         const key = `${s.id}-${f.fila}-${p.numero}`;
         const cls = postiPrenotati.has(key) ? 'prenotato' : p.stato === 'bloccato' ? 'bloccato' : '';
         html += `<div class="seat ${cls}" title="Fila ${f.fila} Posto ${p.numero}">${p.numero}</div>`;
