@@ -391,7 +391,7 @@ function renderMappa() {
       lbl.textContent = settore.nome;
       container.appendChild(lbl);
     }
-    (settore.file || []).forEach(fila => {
+    ([...(settore.file || [])].reverse()).forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
       row.style.gap = '3px';
