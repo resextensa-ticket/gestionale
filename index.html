@@ -623,27 +623,23 @@
   }
 
   .seat {
-    width: 22px;
-    height: 20px;
-    border: 1px solid var(--bordo);
-    background: white;
+    width: 36px;
+    height: 44px;
     cursor: pointer;
-    transition: all 0.1s;
-    display: flex;
+    transition: opacity 0.1s;
+    user-select: none;
+    position: relative;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 7px;
-    color: var(--testo-light);
-    position: relative;
+    flex-shrink: 0;
   }
-
-  .seat:hover { border-color: var(--accento); background: rgba(200,169,126,0.1); }
-  .seat.prenotato { background: var(--accento); border-color: var(--accento-dark); color: var(--nero); cursor: not-allowed; }
-  .seat.bloccato { background: var(--bordo); border-color: var(--bordo); cursor: not-allowed; color: var(--testo-light); }
-  .seat.selezionato { background: var(--nero); border-color: var(--nero); color: white; }
-  .seat.riservato { background: #F4D03F; border-color: #D4AC0D; color: var(--nero); cursor: pointer; }
-  .seat.assegnato { background: #E74C3C; border-color: #C0392B; color: white; cursor: not-allowed; }
-  .seat.utilizzato { background: #27AE60; border-color: #1E8449; color: white; cursor: not-allowed; }
+  .seat:hover:not(.bloccato):not(.prenotato):not(.assegnato):not(.utilizzato) { opacity: 0.75; }
+  .seat.bloccato { cursor: not-allowed; opacity: 0.2; }
+  .seat.prenotato { cursor: not-allowed; }
+  .seat.assegnato { cursor: not-allowed; }
+  .seat.utilizzato { cursor: not-allowed; }
+  .seat.riservato { cursor: pointer; }
 
   .seat-legend {
     display: flex;
@@ -1778,6 +1774,35 @@ async function deleteTeatro(id, nome) {
   }
 }
 
+
+function makeSeatSVG(numero, colore, armColore, backColore, numColore) {
+  numColore = numColore || '#888';
+  return `<svg width="34" height="40" viewBox="0 0 34 40" xmlns="http://www.w3.org/2000/svg">
+    <!-- schienale -->
+    <rect x="3" y="0" width="28" height="12" rx="4" fill="${backColore}" stroke="rgba(0,0,0,0.12)" stroke-width="0.6"/>
+    <!-- seduta -->
+    <rect x="1" y="10" width="32" height="24" rx="5" fill="${colore}" stroke="rgba(0,0,0,0.12)" stroke-width="0.6"/>
+    <!-- bracciolo sx -->
+    <rect x="0" y="10" width="5" height="18" rx="2.5" fill="${armColore}" stroke="rgba(0,0,0,0.1)" stroke-width="0.5"/>
+    <!-- bracciolo dx -->
+    <rect x="29" y="10" width="5" height="18" rx="2.5" fill="${armColore}" stroke="rgba(0,0,0,0.1)" stroke-width="0.5"/>
+    <!-- numero -->
+    <text x="17" y="27" text-anchor="middle" dominant-baseline="central" font-size="8" font-family="DM Mono,monospace" fill="${numColore}" font-weight="400">${numero}</text>
+  </svg>`;
+}
+
+function getSeatColors(stato, isSelezionato) {
+  if (isSelezionato) return { body: '#0A0A0A', arm: '#1a1a1a', back: '#1a1a1a', num: 'white' };
+  switch(stato) {
+    case 'prenotato':  return { body: '#C8A97E', arm: '#A8895E', back: '#B8996E', num: '#5a3e1e' };
+    case 'riservato':  return { body: '#F4D03F', arm: '#D4B01F', back: '#E4C02F', num: '#6b5000' };
+    case 'assegnato':  return { body: '#E74C3C', arm: '#C0392B', back: '#D73C2C', num: 'white' };
+    case 'utilizzato': return { body: '#27AE60', arm: '#1A8E46', back: '#1E9E50', num: 'white' };
+    case 'bloccato':   return { body: '#D8D4CF', arm: '#C0BCB7', back: '#C8C4BF', num: '#aaa' };
+    default:           return { body: '#F0EDE8', arm: '#D8D4CF', back: '#E0DDD8', num: '#999' };
+  }
+}
+
 function openMappaTeatro(teatroId) {
   const teatro = teatri.find(t => t.id === teatroId);
   if (!teatro) return;
@@ -1788,36 +1813,42 @@ function openMappaTeatro(teatroId) {
   });
   const postiPrenotati = new Set();
   prenotSp.forEach(p => {
-    (p.biglietti || []).forEach(b => postiPrenotati.add(`${b.settore_id}-${b.fila}-${b.posto}`));
+    (p.biglietti || []).forEach(b => postiPrenotati.add(b.settore_id+'-'+b.fila+'-'+b.posto));
   });
 
-  let html = `<div class="stage-label">● PALCOSCENICO ●</div>`;
+  let html = '';
   (teatro.settori || []).forEach(s => {
-    html += `<div style="margin-bottom:24px"><div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--testo-light);margin-bottom:12px">${s.nome}</div>`;
+    html += '<div style="margin-bottom:24px"><div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--testo-light);margin-bottom:12px">'+s.nome+'</div>';
     (s.file || []).forEach(f => {
-      html += `<div class="seat-row"><div class="seat-row-label">${f.fila}</div>`;
-      ([...(f.posti || [])].reverse()).forEach(p => {
-        const key = `${s.id}-${f.fila}-${p.numero}`;
-        const cls = postiPrenotati.has(key) ? 'prenotato' : p.stato === 'bloccato' ? 'bloccato' : '';
-        html += `<div class="seat ${cls}" title="Fila ${f.fila} Posto ${p.numero}">${p.numero}</div>`;
+      html += '<div class="seat-row" style="gap:3px"><div class="seat-row-label">'+f.fila+'</div>';
+      // Numerazione 1 a sinistra (ordine naturale)
+      (f.posti || []).forEach(p => {
+        const key = s.id+'-'+f.fila+'-'+p.numero;
+        const isPrenotato = postiPrenotati.has(key);
+        const stato = p.stato === 'bloccato' ? 'bloccato' : isPrenotato ? 'prenotato' : 'libero';
+        const c = getSeatColors(stato, false);
+        html += '<div class="seat '+stato+'" title="Fila '+f.fila+' Posto '+p.numero+'">'+makeSeatSVG(p.numero, c.body, c.arm, c.back, c.num)+'</div>';
       });
-      html += `</div>`;
+      html += '</div>';
     });
-    html += `</div>`;
+    html += '</div>';
   });
 
-  html += `
-    <div class="seat-legend">
-      <div class="legend-item"><div class="legend-dot ld-libero"></div>Libero</div>
-      <div class="legend-item"><div class="legend-dot ld-prenotato"></div>Prenotato online</div>
-      <div class="legend-item"><div style="width:16px;height:14px;background:#F4D03F;border:1px solid #D4AC0D;"></div>Riservato</div>
-      <div class="legend-item"><div style="width:16px;height:14px;background:#E74C3C;border:1px solid #C0392B;"></div>Assegnato</div>
-      <div class="legend-item"><div style="width:16px;height:14px;background:#27AE60;border:1px solid #1E8449;"></div>Validato</div>
-      <div class="legend-item"><div class="legend-dot ld-bloccato"></div>Bloccato</div>
-    </div>
-  `;
+  html += '<div class="stage-label" style="margin-top:20px">● PALCOSCENICO ●</div>';
+  html += makeLegendHTML();
   document.getElementById('mappa-content').innerHTML = html;
   openModal('modal-mappa');
+}
+
+function makeLegendHTML() {
+  return '<div class="seat-legend" style="flex-wrap:wrap;gap:12px;margin-top:16px">' +
+    '<div class="legend-item">'+makeSeatSVG('','#F0EDE8','#D8D4CF','#E0DDD8','#999').replace('width="34"','width="20"').replace('height="40"','height="24"').replace('viewBox="0 0 34 40"','viewBox="0 0 34 40"')+'Libero</div>' +
+    '<div class="legend-item">'+makeSeatSVG('','#C8A97E','#A8895E','#B8996E','#5a3e1e').replace('width="34"','width="20"').replace('height="40"','height="24"')+'Prenotato</div>' +
+    '<div class="legend-item">'+makeSeatSVG('','#F4D03F','#D4B01F','#E4C02F','#6b5000').replace('width="34"','width="20"').replace('height="40"','height="24"')+'Riservato</div>' +
+    '<div class="legend-item">'+makeSeatSVG('','#E74C3C','#C0392B','#D73C2C','white').replace('width="34"','width="20"').replace('height="40"','height="24"')+'Assegnato</div>' +
+    '<div class="legend-item">'+makeSeatSVG('','#27AE60','#1A8E46','#1E9E50','white').replace('width="34"','width="20"').replace('height="40"','height="24"')+'Validato</div>' +
+    '<div class="legend-item">'+makeSeatSVG('','#D8D4CF','#C0BCB7','#C8C4BF','#aaa').replace('width="34"','width="20"').replace('height="40"','height="24"')+'Bloccato</div>' +
+    '</div>';
 }
 
 // ══════════════════════════════════════════
@@ -2292,43 +2323,50 @@ function renderMappaSpettacolo() {
     (settore.file || []).forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
+      row.style.gap = '3px';
       const lbl = document.createElement('div');
       lbl.className = 'seat-row-label';
       lbl.textContent = fila.fila;
       row.appendChild(lbl);
-      const postiOrdinati = [...(fila.posti || [])].reverse();
-      postiOrdinati.forEach(posto => {
+      // Numerazione 1 a sinistra (ordine naturale, palco in basso)
+      (fila.posti || []).forEach(posto => {
         const div = document.createElement('div');
         div.className = 'seat';
-        div.textContent = posto.numero;
         const info = getStatoPosto(settore.id, fila.fila, posto.numero);
         const key = settore.id + '-' + fila.fila + '-' + posto.numero;
-        if (posto.stato === 'bloccato') {
-          div.classList.add('bloccato');
+        let stato = 'libero';
+        if (posto.stato === 'bloccato') stato = 'bloccato';
+        else if (info.stato !== 'libero') stato = info.stato;
+        const isSelezionato = postiSelezionatiMappa.has(key);
+        const c = getSeatColors(stato, isSelezionato);
+        div.innerHTML = makeSeatSVG(posto.numero, c.body, c.arm, c.back, c.num);
+        div.classList.add(stato);
+        if (stato === 'bloccato') {
           div.title = 'Non disponibile';
-        } else if (info.stato === 'utilizzato') {
-          div.classList.add('utilizzato');
-          div.title = 'Validato: ' + (info.prenotazione?.cliente?.nome || '') + ' ' + (info.prenotazione?.cliente?.cognome || '');
-        } else if (info.stato === 'assegnato') {
-          div.classList.add('assegnato');
-          div.title = 'Assegnato: ' + (info.prenotazione?.cliente?.nome || '') + ' ' + (info.prenotazione?.cliente?.cognome || '');
-        } else if (info.stato === 'riservato') {
-          div.classList.add('riservato');
+        } else if (stato === 'utilizzato') {
+          div.title = 'Validato: ' + (info.prenotazione?.cliente?.nome||'') + ' ' + (info.prenotazione?.cliente?.cognome||'');
+        } else if (stato === 'assegnato') {
+          div.title = 'Assegnato: ' + (info.prenotazione?.cliente?.nome||'') + ' ' + (info.prenotazione?.cliente?.cognome||'');
+        } else if (stato === 'riservato') {
           div.title = 'Riservato — clicca per assegnare o liberare';
           div.addEventListener('click', () => clickPostoRiservato(settore.id, fila.fila, posto.numero, info.prenotazione));
-        } else if (info.stato === 'prenotato') {
-          div.classList.add('prenotato');
-          div.title = 'Prenotato: ' + (info.prenotazione?.cliente?.nome || '') + ' ' + (info.prenotazione?.cliente?.cognome || '');
+        } else if (stato === 'prenotato') {
+          div.title = 'Prenotato: ' + (info.prenotazione?.cliente?.nome||'') + ' ' + (info.prenotazione?.cliente?.cognome||'');
         } else {
-          div.addEventListener('click', () => clickPostoLibero(div, key));
           div.title = 'Fila ' + fila.fila + ' Posto ' + posto.numero;
-          if (postiSelezionatiMappa.has(key)) div.classList.add('selezionato');
+          div.addEventListener('click', () => clickPostoLibero(div, key));
         }
         row.appendChild(div);
       });
       container.appendChild(row);
     });
   });
+  // Palcoscenico in basso
+  const palco = document.createElement('div');
+  palco.className = 'stage-label';
+  palco.style.marginTop = '20px';
+  palco.textContent = '● PALCOSCENICO ●';
+  container.appendChild(palco);
   document.getElementById('mappa-sp-sel-count').textContent = postiSelezionatiMappa.size;
   document.getElementById('btn-riserva-posti').disabled = postiSelezionatiMappa.size === 0;
 }
