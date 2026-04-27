@@ -285,7 +285,7 @@ const firebaseConfig = {
   appId: "1:243516787764:web:0233aa8bc5a958204a4e61"
 };
 const EMAILJS_SERVICE_ID = "service_yufhfyl";
-const EMAILJS_TEMPLATE_ID = "template_qip5cq1";
+const EMAILJS_TEMPLATE_ID = "template_0yhsdfg";
 const EMAILJS_PUBLIC_KEY = "WgKJFHS0eJIsKJgFm";
 
 firebase.initializeApp(firebaseConfig);
@@ -305,13 +305,14 @@ async function init() {
   showLoading('Caricamento spettacoli...');
   try {
     const [spSnap, tSnap] = await Promise.all([
-      db.collection('spettacoli').where('stato','==','pubblicato').orderBy('data_ora').get(),
+      db.collection('spettacoli').where('stato','==','pubblicato').get(),
       db.collection('teatri').get()
     ]);
     spettacoli = spSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     teatri = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     const now = new Date();
     spettacoli = spettacoli.filter(s => s.data_ora && s.data_ora.toDate() > now);
+    spettacoli.sort((a,b) => a.data_ora.toDate() - b.data_ora.toDate());
     if (spId) {
       const sp = spettacoli.find(s => s.id === spId);
       if (sp) { hideLoading(); await openMappa(sp); return; }
