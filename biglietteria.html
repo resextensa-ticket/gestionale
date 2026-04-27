@@ -499,7 +499,7 @@ async function confermaPrenotazione() {
         spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
         teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
         posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
-        qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qrCode)
+        qr_url: 'Codice biglietto: ' + qrCode
       });
       toast('Email inviata a ' + email);
     } catch(emailErr) {
