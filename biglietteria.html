@@ -367,7 +367,7 @@ async function openMappa(spettacolo) {
     if (!currentTeatro) throw new Error('Teatro non trovato');
     const snap = await db.collection('prenotazioni')
       .where('spettacolo_id','==',spettacolo.id)
-      .where('stato','in',['prenotata','confermata','utilizzata'])
+      .where('stato','in',['prenotata','confermata','utilizzata','riservata','assegnata'])
       .get();
     postiPrenotati = new Set();
     snap.docs.forEach(d => {
