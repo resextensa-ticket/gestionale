@@ -638,9 +638,12 @@
   }
 
   .seat:hover { border-color: var(--accento); background: rgba(200,169,126,0.1); }
-  .seat.prenotato { background: var(--accento); border-color: var(--accento-dark); color: var(--nero); }
+  .seat.prenotato { background: var(--accento); border-color: var(--accento-dark); color: var(--nero); cursor: not-allowed; }
   .seat.bloccato { background: var(--bordo); border-color: var(--bordo); cursor: not-allowed; color: var(--testo-light); }
   .seat.selezionato { background: var(--nero); border-color: var(--nero); color: white; }
+  .seat.riservato { background: #F4D03F; border-color: #D4AC0D; color: var(--nero); cursor: pointer; }
+  .seat.assegnato { background: #E74C3C; border-color: #C0392B; color: white; cursor: not-allowed; }
+  .seat.utilizzato { background: #27AE60; border-color: #1E8449; color: white; cursor: not-allowed; }
 
   .seat-legend {
     display: flex;
@@ -1804,7 +1807,10 @@ function openMappaTeatro(teatroId) {
   html += `
     <div class="seat-legend">
       <div class="legend-item"><div class="legend-dot ld-libero"></div>Libero</div>
-      <div class="legend-item"><div class="legend-dot ld-prenotato"></div>Prenotato</div>
+      <div class="legend-item"><div class="legend-dot ld-prenotato"></div>Prenotato online</div>
+      <div class="legend-item"><div style="width:16px;height:14px;background:#F4D03F;border:1px solid #D4AC0D;"></div>Riservato</div>
+      <div class="legend-item"><div style="width:16px;height:14px;background:#E74C3C;border:1px solid #C0392B;"></div>Assegnato</div>
+      <div class="legend-item"><div style="width:16px;height:14px;background:#27AE60;border:1px solid #1E8449;"></div>Validato</div>
       <div class="legend-item"><div class="legend-dot ld-bloccato"></div>Bloccato</div>
     </div>
   `;
@@ -1844,6 +1850,7 @@ function renderSpettacoli() {
         </td>
         <td>
           <div class="flex gap-2">
+            <button class="btn btn-ghost" style="font-size:10px;padding:5px 8px" onclick="openMappaSpettacolo('${s.id}')">▣</button>
             <button class="btn btn-ghost" style="font-size:10px;padding:5px 8px" onclick="editSpettacolo('${s.id}')">✎</button>
             <button class="btn btn-danger" style="font-size:10px;padding:5px 8px" onclick="deleteSpettacolo('${s.id}', '${s.titolo}')">✕</button>
           </div>
@@ -2165,6 +2172,271 @@ function toast(msg, type = 'success') {
   t.innerHTML = `<span>${type === 'success' ? '✓' : '✕'}</span> ${msg}`;
   c.appendChild(t);
   setTimeout(() => t.remove(), 3000);
+}
+</script>
+
+<!-- MODAL MAPPA SPETTACOLO -->
+<div class="modal-overlay" id="modal-mappa-sp">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modal-mappa-sp-title">Mappa spettacolo</div>
+        <div style="font-size:10px;color:var(--testo-light);letter-spacing:0.08em;margin-top:3px" id="modal-mappa-sp-teatro"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('modal-mappa-sp')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="font-size:11px;color:var(--testo-light)">
+          Selezionati: <strong id="mappa-sp-sel-count">0</strong> posti liberi
+        </div>
+        <button class="btn btn-accent" id="btn-riserva-posti" onclick="riservaPosti()" disabled style="font-size:10px;padding:8px 16px">
+          🟡 Riserva posti selezionati
+        </button>
+      </div>
+      <div class="stage-label">● PALCOSCENICO ●</div>
+      <div class="seat-map-container" style="overflow-x:auto">
+        <div id="mappa-sp-posti"></div>
+      </div>
+      <div class="seat-legend" style="margin-top:20px;flex-wrap:wrap;gap:12px">
+        <div class="legend-item"><div class="legend-dot ld-libero"></div>Libero</div>
+        <div class="legend-item"><div style="width:16px;height:14px;background:var(--nero);border:1px solid var(--nero);"></div>Selezionato</div>
+        <div class="legend-item"><div style="width:16px;height:14px;background:var(--accento);border:1px solid var(--accento-dark);"></div>Prenotato online</div>
+        <div class="legend-item"><div style="width:16px;height:14px;background:#F4D03F;border:1px solid #D4AC0D;"></div>Riservato</div>
+        <div class="legend-item"><div style="width:16px;height:14px;background:#E74C3C;border:1px solid #C0392B;"></div>Assegnato</div>
+        <div class="legend-item"><div style="width:16px;height:14px;background:#27AE60;border:1px solid #1E8449;"></div>Validato</div>
+        <div class="legend-item"><div class="legend-dot ld-bloccato"></div>Bloccato</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-mappa-sp')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL ASSEGNA NOMINATIVO -->
+<div class="modal-overlay" id="modal-assegna">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Assegna posto</div>
+      <button class="modal-close" onclick="closeModal('modal-assegna')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--accento-dark);margin-bottom:16px" id="assegna-posto-label"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Nome *</label><input type="text" id="assegna-nome" placeholder="Mario"></div>
+        <div class="form-group"><label>Cognome *</label><input type="text" id="assegna-cognome" placeholder="Rossi"></div>
+      </div>
+      <div class="form-group"><label>Email</label><input type="email" id="assegna-email" placeholder="mario.rossi@email.it"></div>
+      <div class="form-group"><label>Telefono</label><input type="text" id="assegna-telefono" placeholder="+39 333 1234567"></div>
+      <div class="checkbox-group" style="margin-top:8px">
+        <input type="checkbox" id="assegna-invia-email" checked>
+        <label for="assegna-invia-email">Invia biglietto con QR via email</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-assegna')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaAssegnazione()">Salva assegnazione</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// MAPPA SPETTACOLO INTERATTIVA
+let mappaSpettacoloId = null;
+let mappaTeatro = null;
+let postiSelezionatiMappa = new Set();
+let prenotazioniSpettacolo = [];
+let assegnandoPrenotazioneId = null;
+
+async function openMappaSpettacolo(spettacoloId) {
+  mappaSpettacoloId = spettacoloId;
+  postiSelezionatiMappa = new Set();
+  const sp = spettacoli.find(s => s.id === spettacoloId);
+  if (!sp) return;
+  mappaTeatro = teatri.find(t => t.id === sp.teatro_id);
+  if (!mappaTeatro) { toast('Teatro non trovato', 'error'); return; }
+  const d = sp.data_ora ? sp.data_ora.toDate() : null;
+  document.getElementById('modal-mappa-sp-title').textContent = sp.titolo + (d ? ' — ' + d.toLocaleDateString('it') : '');
+  document.getElementById('modal-mappa-sp-teatro').textContent = mappaTeatro.nome + ' — ' + mappaTeatro.citta;
+  const snap = await db.collection('prenotazioni').where('spettacolo_id', '==', spettacoloId).get();
+  prenotazioniSpettacolo = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderMappaSpettacolo();
+  openModal('modal-mappa-sp');
+}
+
+function getStatoPosto(settoreId, fila, numero) {
+  for (const p of prenotazioniSpettacolo) {
+    if (p.stato === 'annullata') continue;
+    for (const b of (p.biglietti || [])) {
+      if (b.settore_id === settoreId && b.fila === fila && b.posto === numero) {
+        return { stato: p.stato === 'utilizzata' ? 'utilizzato' : p.stato === 'assegnata' ? 'assegnato' : p.stato === 'riservata' ? 'riservato' : 'prenotato', prenotazione: p };
+      }
+    }
+  }
+  return { stato: 'libero', prenotazione: null };
+}
+
+function renderMappaSpettacolo() {
+  const container = document.getElementById('mappa-sp-posti');
+  container.innerHTML = '';
+  (mappaTeatro.settori || []).forEach(settore => {
+    if ((mappaTeatro.settori || []).length > 1) {
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--testo-light);margin-bottom:12px;margin-top:16px';
+      lbl.textContent = settore.nome;
+      container.appendChild(lbl);
+    }
+    (settore.file || []).forEach(fila => {
+      const row = document.createElement('div');
+      row.className = 'seat-row';
+      const lbl = document.createElement('div');
+      lbl.className = 'seat-row-label';
+      lbl.textContent = fila.fila;
+      row.appendChild(lbl);
+      const postiOrdinati = [...(fila.posti || [])].reverse();
+      postiOrdinati.forEach(posto => {
+        const div = document.createElement('div');
+        div.className = 'seat';
+        div.textContent = posto.numero;
+        const info = getStatoPosto(settore.id, fila.fila, posto.numero);
+        const key = settore.id + '-' + fila.fila + '-' + posto.numero;
+        if (posto.stato === 'bloccato') {
+          div.classList.add('bloccato');
+          div.title = 'Non disponibile';
+        } else if (info.stato === 'utilizzato') {
+          div.classList.add('utilizzato');
+          div.title = 'Validato: ' + (info.prenotazione?.cliente?.nome || '') + ' ' + (info.prenotazione?.cliente?.cognome || '');
+        } else if (info.stato === 'assegnato') {
+          div.classList.add('assegnato');
+          div.title = 'Assegnato: ' + (info.prenotazione?.cliente?.nome || '') + ' ' + (info.prenotazione?.cliente?.cognome || '');
+        } else if (info.stato === 'riservato') {
+          div.classList.add('riservato');
+          div.title = 'Riservato — clicca per assegnare o liberare';
+          div.addEventListener('click', () => clickPostoRiservato(settore.id, fila.fila, posto.numero, info.prenotazione));
+        } else if (info.stato === 'prenotato') {
+          div.classList.add('prenotato');
+          div.title = 'Prenotato: ' + (info.prenotazione?.cliente?.nome || '') + ' ' + (info.prenotazione?.cliente?.cognome || '');
+        } else {
+          div.addEventListener('click', () => clickPostoLibero(div, key));
+          div.title = 'Fila ' + fila.fila + ' Posto ' + posto.numero;
+          if (postiSelezionatiMappa.has(key)) div.classList.add('selezionato');
+        }
+        row.appendChild(div);
+      });
+      container.appendChild(row);
+    });
+  });
+  document.getElementById('mappa-sp-sel-count').textContent = postiSelezionatiMappa.size;
+  document.getElementById('btn-riserva-posti').disabled = postiSelezionatiMappa.size === 0;
+}
+
+function clickPostoLibero(div, key) {
+  if (postiSelezionatiMappa.has(key)) {
+    postiSelezionatiMappa.delete(key);
+    div.classList.remove('selezionato');
+  } else {
+    postiSelezionatiMappa.add(key);
+    div.classList.add('selezionato');
+  }
+  document.getElementById('mappa-sp-sel-count').textContent = postiSelezionatiMappa.size;
+  document.getElementById('btn-riserva-posti').disabled = postiSelezionatiMappa.size === 0;
+}
+
+async function clickPostoRiservato(settoreId, fila, numero, prenotazione) {
+  if (!prenotazione) return;
+  const scelta = confirm('Posto Fila ' + fila + ' N.' + numero + ' — riservato.
+
+OK = Assegna a nominativo
+Annulla = Libera il posto');
+  if (scelta) {
+    openModalAssegna(prenotazione.id, fila, numero);
+  } else {
+    if (confirm('Liberare il posto Fila ' + fila + ' N.' + numero + '?')) {
+      await db.collection('prenotazioni').doc(prenotazione.id).delete();
+      const snap = await db.collection('prenotazioni').where('spettacolo_id', '==', mappaSpettacoloId).get();
+      prenotazioniSpettacolo = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderMappaSpettacolo();
+      toast('Posto liberato');
+    }
+  }
+}
+
+async function riservaPosti() {
+  if (postiSelezionatiMappa.size === 0) return;
+  const biglietti = [];
+  postiSelezionatiMappa.forEach(key => {
+    const parts = key.split('-');
+    biglietti.push({ settore_id: parts[0], fila: parts[1], posto: parseInt(parts[2]), importo: 0 });
+  });
+  try {
+    await db.collection('prenotazioni').add({
+      spettacolo_id: mappaSpettacoloId,
+      cliente: { nome: 'RISERVATO', cognome: 'ADMIN', email: '', telefono: '' },
+      biglietti,
+      importo_totale: 0,
+      metodo_pagamento: 'sportello',
+      pagamento: { provider_id: '', stato: 'in_attesa', data: firebase.firestore.Timestamp.now() },
+      qr_code: '',
+      canale: 'sportello',
+      stato: 'riservata',
+      creata_il: firebase.firestore.Timestamp.now()
+    });
+    postiSelezionatiMappa = new Set();
+    const snap = await db.collection('prenotazioni').where('spettacolo_id', '==', mappaSpettacoloId).get();
+    prenotazioniSpettacolo = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMappaSpettacolo();
+    toast('Posti riservati — clicca su un posto giallo per assegnarlo');
+  } catch(e) { toast('Errore: ' + e.message, 'error'); }
+}
+
+function openModalAssegna(prenotazioneId, fila, numero) {
+  assegnandoPrenotazioneId = prenotazioneId;
+  document.getElementById('assegna-posto-label').textContent = 'Fila ' + fila + ' Posto ' + numero;
+  ['assegna-nome','assegna-cognome','assegna-email','assegna-telefono'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('assegna-invia-email').checked = true;
+  openModal('modal-assegna');
+}
+
+async function salvaAssegnazione() {
+  const nome = document.getElementById('assegna-nome').value.trim();
+  const cognome = document.getElementById('assegna-cognome').value.trim();
+  const email = document.getElementById('assegna-email').value.trim();
+  const telefono = document.getElementById('assegna-telefono').value.trim();
+  const inviaEmail = document.getElementById('assegna-invia-email').checked;
+  if (!nome || !cognome) { toast('Inserisci nome e cognome', 'error'); return; }
+  const qrCode = 'RX-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+  try {
+    await db.collection('prenotazioni').doc(assegnandoPrenotazioneId).update({
+      cliente: { nome, cognome, email, telefono },
+      stato: 'assegnata',
+      qr_code: qrCode
+    });
+    if (inviaEmail && email) {
+      const p = prenotazioniSpettacolo.find(x => x.id === assegnandoPrenotazioneId);
+      const sp = spettacoli.find(s => s.id === mappaSpettacoloId);
+      const d = sp?.data_ora?.toDate();
+      const postiStr = (p?.biglietti || []).map(b => 'Fila ' + b.fila + ' Posto ' + b.posto).join(', ');
+      try {
+        await emailjs.send('service_yufhfyl', 'template_0yhsdfg', {
+          cliente_nome: nome + ' ' + cognome,
+          cliente_email: email,
+          spettacolo_titolo: sp?.titolo || '',
+          spettacolo_data: d ? d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}) : '',
+          teatro_nome: (mappaTeatro?.nome || '') + ' — ' + (mappaTeatro?.citta || ''),
+          posti: postiStr,
+          qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qrCode)
+        });
+        toast('Assegnazione salvata — email inviata a ' + email);
+      } catch(e) { toast('Assegnazione salvata. Email non inviata.', 'error'); }
+    } else {
+      toast('Assegnazione salvata');
+    }
+    closeModal('modal-assegna');
+    const snap = await db.collection('prenotazioni').where('spettacolo_id', '==', mappaSpettacoloId).get();
+    prenotazioniSpettacolo = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMappaSpettacolo();
+  } catch(e) { toast('Errore: ' + e.message, 'error'); }
 }
 </script>
 </body>
