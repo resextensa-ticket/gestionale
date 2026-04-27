@@ -2328,7 +2328,7 @@ function renderMappaSpettacolo() {
       lbl.textContent = settore.nome;
       container.appendChild(lbl);
     }
-    ([...(settore.file || [])].reverse()).forEach(fila => {
+    (...(settore.file || [])].reverse()).forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
       row.style.gap = '3px';
@@ -2357,12 +2357,15 @@ function renderMappaSpettacolo() {
           div.title = 'Assegnato: ' + (info.prenotazione?.cliente?.nome||'') + ' ' + (info.prenotazione?.cliente?.cognome||'');
         } else if (stato === 'riservato') {
           div.title = 'Riservato — clicca per assegnare o liberare';
-          div.addEventListener('click', () => clickPostoRiservato(settore.id, fila.fila, posto.numero, info.prenotazione));
+          const _pren = info.prenotazione;
+          const _sid = settore.id; const _fi = fila.fila; const _nu = posto.numero;
+          div.onclick = () => clickPostoRiservato(_sid, _fi, _nu, _pren);
         } else if (stato === 'prenotato') {
           div.title = 'Prenotato: ' + (info.prenotazione?.cliente?.nome||'') + ' ' + (info.prenotazione?.cliente?.cognome||'');
         } else {
           div.title = 'Fila ' + fila.fila + ' Posto ' + posto.numero;
-          div.addEventListener('click', () => clickPostoLibero(div, key));
+          const _key = key; const _div = div;
+          div.onclick = () => clickPostoLibero(_div, _key);
         }
         row.appendChild(div);
       });
@@ -2397,13 +2400,23 @@ async function clickPostoRiservato(settoreId, fila, numero, prenotazione) {
   if (scelta) {
     openModalAssegna(prenotazione.id, fila, numero);
   } else {
-    if (confirm('Liberare il posto Fila ' + fila + ' N.' + numero + '?')) {
-      await db.collection('prenotazioni').doc(prenotazione.id).delete();
+    // Libera direttamente senza secondo confirm
+    try {
+      // Se la prenotazione ha più biglietti, rimuovi solo questo posto
+      const p = prenotazioniSpettacolo.find(x => x.id === prenotazione.id);
+      const altriBiglietti = (p?.biglietti || []).filter(b => !(b.settore_id === settoreId && b.fila === fila && b.posto === numero));
+      if (altriBiglietti.length === 0) {
+        // Nessun altro biglietto — elimina tutta la prenotazione
+        await db.collection('prenotazioni').doc(prenotazione.id).delete();
+      } else {
+        // Rimangono altri biglietti — aggiorna solo la lista
+        await db.collection('prenotazioni').doc(prenotazione.id).update({ biglietti: altriBiglietti });
+      }
       const snap = await db.collection('prenotazioni').where('spettacolo_id', '==', mappaSpettacoloId).get();
       prenotazioniSpettacolo = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderMappaSpettacolo();
       toast('Posto liberato');
-    }
+    } catch(e) { toast('Errore: ' + e.message, 'error'); }
   }
 }
 
