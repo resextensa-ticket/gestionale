@@ -35,7 +35,7 @@ body { font-family: "DM Mono", monospace; background: var(--sfondo); color: var(
 .step-item.done .step-num { background: var(--accento); border-color: var(--accento); color: var(--nero); }
 .step-arrow { margin-left: 24px; color: var(--bordo); font-size: 10px; }
 
-.main { max-width: 960px; margin: 0 auto; padding: 40px 20px; }
+.main { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
 .view { display: none; animation: fadeIn 0.25s ease; }
 .view.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -60,7 +60,7 @@ body { font-family: "DM Mono", monospace; background: var(--sfondo); color: var(
 .occupazione-bar { height: 2px; background: var(--bordo); margin-top: 10px; }
 .occupazione-fill { height: 100%; background: var(--accento); }
 
-.mappa-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; gap: 20px; flex-wrap: wrap; }
+.mappa-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; gap: 20px; flex-wrap: wrap; max-width: 100%; }
 .mappa-info h2 { font-family: "Cormorant Garamond", serif; font-size: 28px; font-weight: 300; letter-spacing: 0.04em; margin-bottom: 4px; }
 .mappa-meta { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--testo-light); }
 .selezione-box { background: white; border: 1px solid var(--bordo); padding: 16px 20px; min-width: 200px; text-align: right; }
@@ -69,15 +69,15 @@ body { font-family: "DM Mono", monospace; background: var(--sfondo); color: var(
 .selezione-lista { font-size: 10px; color: var(--accento-dark); margin-top: 4px; letter-spacing: 0.05em; }
 
 .stage-label { text-align: center; font-size: 9px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--testo-light); padding: 12px; border: 1px solid var(--bordo); margin-bottom: 28px; background: rgba(200,169,126,0.05); }
-.mappa-container { overflow-x: auto; padding-bottom: 16px; }
+.mappa-container { overflow-x: auto; overflow-y: auto; padding-bottom: 16px; }
 .settore-label { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--testo-light); margin-bottom: 12px; margin-top: 20px; }
 .seat-row { display: flex; align-items: center; gap: 4px; margin-bottom: 5px; justify-content: center; }
 .seat-row-label { font-size: 9px; letter-spacing: 0.08em; color: var(--testo-light); width: 18px; text-align: right; flex-shrink: 0; margin-right: 4px; }
-.seat { width: 24px; height: 22px; border: 1px solid var(--bordo); background: white; cursor: pointer; transition: all 0.1s; display: flex; align-items: center; justify-content: center; font-size: 7px; color: var(--testo-light); user-select: none; }
-.seat:hover:not(.bloccato):not(.prenotato) { border-color: var(--accento); background: rgba(200,169,126,0.15); }
-.seat.selezionato { background: var(--nero); border-color: var(--nero); color: white; }
-.seat.prenotato { background: rgba(200,169,126,0.25); border-color: var(--accento); cursor: not-allowed; color: var(--accento-dark); }
-.seat.bloccato { background: var(--bordo); border-color: transparent; cursor: not-allowed; color: transparent; }
+.seat { width: 36px; height: 44px; cursor: pointer; transition: opacity 0.1s; user-select: none; position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.seat:hover:not(.bloccato):not(.prenotato) { opacity: 0.75; }
+.seat.selezionato { cursor: pointer; }
+.seat.prenotato { cursor: not-allowed; }
+.seat.bloccato { cursor: not-allowed; opacity: 0.2; }
 
 .seat-legend { display: flex; gap: 24px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--bordo); justify-content: center; flex-wrap: wrap; }
 .legend-item { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--testo-light); letter-spacing: 0.05em; }
@@ -206,13 +206,12 @@ input:focus { border-color: var(--nero); }
       <span class="timer-count" id="timer-count">10:00</span>
     </div>
     <div class="mappa-container">
-      <div class="stage-label">● PALCOSCENICO ●</div>
       <div id="mappa-posti"></div>
-      <div class="seat-legend">
-        <div class="legend-item"><div class="legend-dot ld-libero"></div>Disponibile</div>
-        <div class="legend-item"><div class="legend-dot ld-selezionato"></div>Selezionato</div>
-        <div class="legend-item"><div class="legend-dot ld-prenotato"></div>Occupato</div>
-        <div class="legend-item"><div class="legend-dot ld-bloccato"></div>Non disponibile</div>
+      <div class="seat-legend" style="flex-wrap:wrap;gap:14px;margin-top:16px">
+        <div class="legend-item" style="gap:6px;font-size:10px"><svg width="18" height="22" viewBox="0 0 34 40"><rect x="3" y="0" width="28" height="12" rx="4" fill="#E0DDD8"/><rect x="1" y="10" width="32" height="24" rx="5" fill="#F0EDE8"/><rect x="0" y="10" width="5" height="18" rx="2.5" fill="#D8D4CF"/><rect x="29" y="10" width="5" height="18" rx="2.5" fill="#D8D4CF"/></svg>Disponibile</div>
+        <div class="legend-item" style="gap:6px;font-size:10px"><svg width="18" height="22" viewBox="0 0 34 40"><rect x="3" y="0" width="28" height="12" rx="4" fill="#1a1a1a"/><rect x="1" y="10" width="32" height="24" rx="5" fill="#0A0A0A"/><rect x="0" y="10" width="5" height="18" rx="2.5" fill="#1a1a1a"/><rect x="29" y="10" width="5" height="18" rx="2.5" fill="#1a1a1a"/></svg>Selezionato</div>
+        <div class="legend-item" style="gap:6px;font-size:10px"><svg width="18" height="22" viewBox="0 0 34 40"><rect x="3" y="0" width="28" height="12" rx="4" fill="#B8996E"/><rect x="1" y="10" width="32" height="24" rx="5" fill="#C8A97E"/><rect x="0" y="10" width="5" height="18" rx="2.5" fill="#A8895E"/><rect x="29" y="10" width="5" height="18" rx="2.5" fill="#A8895E"/></svg>Occupato</div>
+        <div class="legend-item" style="gap:6px;font-size:10px"><svg width="18" height="22" viewBox="0 0 34 40" opacity="0.25"><rect x="3" y="0" width="28" height="12" rx="4" fill="#C8C4BF"/><rect x="1" y="10" width="32" height="24" rx="5" fill="#D8D4CF"/><rect x="0" y="10" width="5" height="18" rx="2.5" fill="#C0BCB7"/><rect x="29" y="10" width="5" height="18" rx="2.5" fill="#C0BCB7"/></svg>Non disponibile</div>
       </div>
     </div>
     <div class="mappa-footer">
@@ -395,22 +394,29 @@ function renderMappa() {
     (settore.file || []).forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
+      row.style.gap = '3px';
       const lbl = document.createElement('div');
       lbl.className = 'seat-row-label';
       lbl.textContent = fila.fila;
       row.appendChild(lbl);
-      const postiOrdinati = [...(fila.posti || [])].reverse();
-      postiOrdinati.forEach(posto => {
-        const key = `${settore.id}-${fila.fila}-${posto.numero}`;
+      // Numerazione 1 a sinistra, palco in basso
+      (fila.posti || []).forEach(posto => {
+        const key = settore.id+'-'+fila.fila+'-'+posto.numero;
         const div = document.createElement('div');
         div.className = 'seat';
-        div.textContent = posto.numero;
-        div.title = `Fila ${fila.fila} Posto ${posto.numero}`;
-        if (posto.stato === 'bloccato') {
+        const isPrenotato = postiPrenotati.has(key);
+        const isBloccato = posto.stato === 'bloccato';
+        const isSelezionato = postiSelezionati.some(p => p.key === key);
+        const stato = isBloccato ? 'bloccato' : isPrenotato ? 'prenotato' : 'libero';
+        const c = getBiglSeatColors(stato, isSelezionato);
+        div.innerHTML = makeSeatSVG(posto.numero, c.body, c.arm, c.back, c.num);
+        div.title = 'Fila '+fila.fila+' Posto '+posto.numero;
+        if (isBloccato) {
           div.classList.add('bloccato');
-        } else if (postiPrenotati.has(key)) {
+        } else if (isPrenotato) {
           div.classList.add('prenotato');
         } else {
+          if (isSelezionato) div.classList.add('selezionato');
           div.addEventListener('click', () => togglePosto(div, key, settore.id, fila.fila, posto.numero));
         }
         row.appendChild(div);
@@ -418,6 +424,12 @@ function renderMappa() {
       container.appendChild(row);
     });
   });
+  // Palcoscenico in basso
+  const palco = document.createElement('div');
+  palco.className = 'stage-label';
+  palco.style.marginTop = '20px';
+  palco.textContent = '● PALCOSCENICO ●';
+  container.appendChild(palco);
 }
 
 function togglePosto(div, key, settoreId, fila, numero) {
@@ -425,10 +437,16 @@ function togglePosto(div, key, settoreId, fila, numero) {
   if (idx >= 0) {
     postiSelezionati.splice(idx, 1);
     div.classList.remove('selezionato');
+    const c = getBiglSeatColors('libero', false);
+    div.innerHTML = makeSeatSVG(numero, c.body, c.arm, c.back, c.num);
+    div.addEventListener('click', () => togglePosto(div, key, settoreId, fila, numero));
   } else {
     if (postiSelezionati.length >= MAX_POSTI) { toast('Massimo ' + MAX_POSTI + ' posti selezionabili', 'error'); return; }
     postiSelezionati.push({ key, settore_id: settoreId, fila, posto: numero });
     div.classList.add('selezionato');
+    const c = getBiglSeatColors('libero', true);
+    div.innerHTML = makeSeatSVG(numero, c.body, c.arm, c.back, c.num);
+    div.addEventListener('click', () => togglePosto(div, key, settoreId, fila, numero));
   }
   updateSelezione();
 }
@@ -499,7 +517,7 @@ async function confermaPrenotazione() {
         spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
         teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
         posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
-        qr_url: 'Codice biglietto: ' + qrCode
+        qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qrCode)
       });
       toast('Email inviata a ' + email);
     } catch(emailErr) {
@@ -547,6 +565,24 @@ function goToStep(n) {
   window.scrollTo(0,0);
 }
 
+
+function makeSeatSVG(numero, colore, armColore, backColore, numColore) {
+  numColore = numColore || '#888';
+  return '<svg width="34" height="40" viewBox="0 0 34 40" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect x="3" y="0" width="28" height="12" rx="4" fill="'+backColore+'" stroke="rgba(0,0,0,0.12)" stroke-width="0.6"/>' +
+    '<rect x="1" y="10" width="32" height="24" rx="5" fill="'+colore+'" stroke="rgba(0,0,0,0.12)" stroke-width="0.6"/>' +
+    '<rect x="0" y="10" width="5" height="18" rx="2.5" fill="'+armColore+'" stroke="rgba(0,0,0,0.1)" stroke-width="0.5"/>' +
+    '<rect x="29" y="10" width="5" height="18" rx="2.5" fill="'+armColore+'" stroke="rgba(0,0,0,0.1)" stroke-width="0.5"/>' +
+    '<text x="17" y="27" text-anchor="middle" dominant-baseline="central" font-size="8" font-family="DM Mono,monospace" fill="'+numColore+'" font-weight="400">'+numero+'</text>' +
+    '</svg>';
+}
+
+function getBiglSeatColors(stato, isSelezionato) {
+  if (isSelezionato) return { body: '#0A0A0A', arm: '#1a1a1a', back: '#1a1a1a', num: 'white' };
+  if (stato === 'prenotato') return { body: '#C8A97E', arm: '#A8895E', back: '#B8996E', num: '#5a3e1e' };
+  if (stato === 'bloccato')  return { body: '#D8D4CF', arm: '#C0BCB7', back: '#C8C4BF', num: '#aaa' };
+  return { body: '#F0EDE8', arm: '#D8D4CF', back: '#E0DDD8', num: '#999' };
+}
 function showLoading(text) { document.getElementById('loading-text').textContent = text||'Caricamento...'; document.getElementById('loading').classList.add('show'); }
 function hideLoading() { document.getElementById('loading').classList.remove('show'); }
 function toast(msg, type) {
