@@ -2345,10 +2345,7 @@ function clickPostoLibero(div, key) {
 
 async function clickPostoRiservato(settoreId, fila, numero, prenotazione) {
   if (!prenotazione) return;
-  const scelta = confirm('Posto Fila ' + fila + ' N.' + numero + ' — riservato.
-
-OK = Assegna a nominativo
-Annulla = Libera il posto');
+  const scelta = confirm('Posto Fila ' + fila + ' N.' + numero + ' — riservato.\n\nOK = Assegna a nominativo\nAnnulla = Libera il posto');
   if (scelta) {
     openModalAssegna(prenotazione.id, fila, numero);
   } else {
