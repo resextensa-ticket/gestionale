@@ -1819,7 +1819,7 @@ function openMappaTeatro(teatroId) {
   let html = '';
   (teatro.settori || []).forEach(s => {
     html += '<div style="margin-bottom:24px"><div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--testo-light);margin-bottom:12px">'+s.nome+'</div>';
-    (s.file || []).forEach(f => {
+    ([...(s.file || [])].reverse()).forEach(f => {
       html += '<div class="seat-row" style="gap:3px"><div class="seat-row-label">'+f.fila+'</div>';
       // Numerazione 1 a sinistra (ordine naturale)
       (f.posti || []).forEach(p => {
@@ -2320,7 +2320,7 @@ function renderMappaSpettacolo() {
       lbl.textContent = settore.nome;
       container.appendChild(lbl);
     }
-    (settore.file || []).forEach(fila => {
+    (...(settore.file || [])].reverse()).forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
       row.style.gap = '3px';
