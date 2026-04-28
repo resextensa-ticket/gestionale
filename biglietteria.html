@@ -396,9 +396,10 @@ function renderMappa() {
       row.className = 'seat-row';
       const isFilaLaterale = fila.posti && fila.posti.length === 2;
       if (isFilaLaterale) {
+        const maxPostiSett = Math.max(...(settore.file||[]).map(f => (f.posti||[]).length));
+        const rowW = maxPostiSett * 39 + 28;
         row.style.justifyContent = 'space-between';
-        row.style.width = '620px';
-        row.style.maxWidth = '92vw';
+        row.style.width = rowW + 'px';
         row.style.gap = '3px';
       } else {
         row.style.gap = '3px';

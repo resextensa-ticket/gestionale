@@ -1830,7 +1830,9 @@ function openMappaTeatro(teatroId) {
     html += '<div style="margin-bottom:24px"><div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--testo-light);margin-bottom:12px">'+s.nome+'</div>';
     (s.file || []).slice().reverse().forEach(f => {
       const isFilaLat = f.posti && f.posti.length === 2;
-      const rowSt = isFilaLat ? 'justify-content:space-between;width:620px;max-width:92vw;gap:3px' : 'gap:3px';
+      const maxP = Math.max(...(s.file||[]).map(x => (x.posti||[]).length));
+      const maxW = maxP * 39 + 28;
+      const rowSt = isFilaLat ? 'justify-content:space-between;width:'+maxW+'px;gap:3px' : 'gap:3px';
       html += '<div class="seat-row" style="'+rowSt+'"><div class="seat-row-label">'+f.fila+'</div>';
       // Numerazione 1 a sinistra (ordine naturale)
       (f.posti || []).forEach(p => {
@@ -2330,14 +2332,16 @@ function renderMappaSpettacolo() {
       lbl.textContent = settore.nome;
       container.appendChild(lbl);
     }
+    // Calcola larghezza max fila del settore per allineare i posti laterali
+    const maxPosti = Math.max(...(settore.file || []).map(f => (f.posti||[]).length));
+    const rowMaxWidth = maxPosti * 39 + 28; // 39px per posto + label
     (settore.file || []).slice().reverse().forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
       const isFilaLaterale = fila.posti && fila.posti.length === 2;
       if (isFilaLaterale) {
         row.style.justifyContent = 'space-between';
-        row.style.width = '600px';
-        row.style.maxWidth = '90vw';
+        row.style.width = rowMaxWidth + 'px';
         row.style.gap = '3px';
       } else {
         row.style.gap = '3px';
