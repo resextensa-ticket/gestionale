@@ -1828,8 +1828,10 @@ function openMappaTeatro(teatroId) {
   let html = '';
   (teatro.settori || []).forEach(s => {
     html += '<div style="margin-bottom:24px"><div style="font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:var(--testo-light);margin-bottom:12px">'+s.nome+'</div>';
-    ([...(s.file || [])].reverse()).forEach(f => {
-      html += '<div class="seat-row" style="gap:3px"><div class="seat-row-label">'+f.fila+'</div>';
+    (s.file || []).slice().reverse().forEach(f => {
+      const isFilaLat = f.posti && f.posti.length === 2;
+      const rowSt = isFilaLat ? 'justify-content:space-between;width:620px;max-width:92vw;gap:3px' : 'gap:3px';
+      html += '<div class="seat-row" style="'+rowSt+'"><div class="seat-row-label">'+f.fila+'</div>';
       // Numerazione 1 a sinistra (ordine naturale)
       (f.posti || []).forEach(p => {
         const key = s.id+'-'+f.fila+'-'+p.numero;
@@ -2328,10 +2330,18 @@ function renderMappaSpettacolo() {
       lbl.textContent = settore.nome;
       container.appendChild(lbl);
     }
-    (...(settore.file || [])].reverse()).forEach(fila => {
+    (settore.file || []).slice().reverse().forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
-      row.style.gap = '3px';
+      const isFilaLaterale = fila.posti && fila.posti.length === 2;
+      if (isFilaLaterale) {
+        row.style.justifyContent = 'space-between';
+        row.style.width = '600px';
+        row.style.maxWidth = '90vw';
+        row.style.gap = '3px';
+      } else {
+        row.style.gap = '3px';
+      }
       const lbl = document.createElement('div');
       lbl.className = 'seat-row-label';
       lbl.textContent = fila.fila;

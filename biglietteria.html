@@ -394,7 +394,15 @@ function renderMappa() {
     ([...(settore.file || [])].reverse()).forEach(fila => {
       const row = document.createElement('div');
       row.className = 'seat-row';
-      row.style.gap = '3px';
+      const isFilaLaterale = fila.posti && fila.posti.length === 2;
+      if (isFilaLaterale) {
+        row.style.justifyContent = 'space-between';
+        row.style.width = '620px';
+        row.style.maxWidth = '92vw';
+        row.style.gap = '3px';
+      } else {
+        row.style.gap = '3px';
+      }
       const lbl = document.createElement('div');
       lbl.className = 'seat-row-label';
       lbl.textContent = fila.fila;
