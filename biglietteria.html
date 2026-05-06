@@ -409,7 +409,12 @@ function renderMappa() {
       lbl.textContent = fila.fila;
       row.appendChild(lbl);
       // Numerazione 1 a sinistra, palco in basso
+      const _useSc2 = isFilaConScalette(settore.id, fila.fila, (fila.posti||[]).length);
+      if (_useSc2) { const sc = makeScalettaEl('laterale'); row.appendChild(sc); }
+      let _scIdx2 = 0;
       (fila.posti || []).forEach(posto => {
+        _scIdx2++;
+        if (_useSc2 && _scIdx2 === 13) row.appendChild(makeScalettaEl('centrale'));
         const key = settore.id+'-'+fila.fila+'-'+posto.numero;
         const div = document.createElement('div');
         div.className = 'seat';
@@ -430,6 +435,7 @@ function renderMappa() {
         }
         row.appendChild(div);
       });
+      if (_useSc2) row.appendChild(makeScalettaEl('laterale')); // scaletta dx
       container.appendChild(row);
     });
   });
@@ -591,6 +597,26 @@ function getBiglSeatColors(stato, isSelezionato) {
   if (stato === 'prenotato') return { body: '#C8A97E', arm: '#A8895E', back: '#B8996E', num: '#5a3e1e' };
   if (stato === 'bloccato')  return { body: '#D8D4CF', arm: '#C0BCB7', back: '#C8C4BF', num: '#aaa' };
   return { body: '#F0EDE8', arm: '#D8D4CF', back: '#E0DDD8', num: '#999' };
+}
+
+// Helper scalette Teatro Abeliano
+function makeScalettaEl(tipo) {
+  const div = document.createElement('div');
+  div.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:0.85;';
+  if (tipo === 'centrale') {
+    div.style.width = '20px';
+    div.innerHTML = '<svg width="20" height="40" viewBox="0 0 20 40" xmlns="http://www.w3.org/2000/svg">  <rect x="2" y="0" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="2" y="6" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="2" y="12" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="2" y="18" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="2" y="24" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="2" y="30" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="2" y="36" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="0" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/>  <rect x="18" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/></svg>';
+  } else {
+    div.style.width = '14px';
+    div.innerHTML = '<svg width="14" height="40" viewBox="0 0 14 40" xmlns="http://www.w3.org/2000/svg">  <rect x="1" y="0" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="1" y="6" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="1" y="12" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="1" y="18" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="1" y="24" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="1" y="30" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="1" y="36" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/>  <rect x="0" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/>  <rect x="12" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/></svg>';
+  }
+  return div;
+}
+
+function isFilaConScalette(settoreId, filaLetter, numPosti) {
+  // Solo platea Abeliano (settore 'sala') con 24 posti, file A-M
+  return settoreId === 'sala' && numPosti === 24 &&
+    ['A','B','C','D','E','F','G','H','I','L','M'].includes(filaLetter);
 }
 function showLoading(text) { document.getElementById('loading-text').textContent = text||'Caricamento...'; document.getElementById('loading').classList.add('show'); }
 function hideLoading() { document.getElementById('loading').classList.remove('show'); }
