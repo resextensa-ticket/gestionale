@@ -1357,6 +1357,22 @@ const firebaseConfig = {
   appId: "1:243516787764:web:0233aa8bc5a958204a4e61"
 };
 
+
+function makeScalettaEl(tipo) {
+  const div = document.createElement('div');
+  div.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:0.85;';
+  const svgLat = '<svg width="14" height="40" viewBox="0 0 14 40"><rect x="1" y="0" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="1" y="6" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="1" y="12" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="1" y="18" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="1" y="24" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="1" y="30" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="1" y="36" width="12" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="0" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/><rect x="12" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/></svg>';
+  const svgCen = '<svg width="20" height="40" viewBox="0 0 20 40"><rect x="2" y="0" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="2" y="6" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="2" y="12" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="2" y="18" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="2" y="24" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="2" y="30" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="2" y="36" width="16" height="2" rx="1" fill="#C8A97E" opacity="0.7"/><rect x="0" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/><rect x="18" y="0" width="2" height="40" rx="1" fill="#A8895E" opacity="0.5"/></svg>';
+  div.style.width = tipo === 'centrale' ? '20px' : '14px';
+  div.innerHTML = tipo === 'centrale' ? svgCen : svgLat;
+  return div;
+}
+
+function isFilaConScalette(settoreId, filaLetter, numPosti) {
+  return settoreId === 'sala' && numPosti === 24 &&
+    ['A','B','C','D','E','F','G','H','I','L','M'].includes(filaLetter);
+}
+
 firebase.initializeApp(firebaseConfig);
 emailjs.init("WgKJFHS0eJIsKJgFm");
 const auth = firebase.auth();
