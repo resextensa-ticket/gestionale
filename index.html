@@ -959,24 +959,24 @@
   </div>
   <nav class="sidebar-nav">
     <div class="nav-section">Panoramica</div>
-    <a class="nav-item active" onclick="showView('dashboard')" href="#">
+    <a class="nav-item active" onclick="showView('dashboard')" href="#" id="nav-dashboard">
       <span class="icon">◈</span> Dashboard
     </a>
-    <div class="nav-section">Gestione</div>
-    <a class="nav-item" onclick="showView('teatri')" href="#">
+    <div class="nav-section" id="nav-section-gestione">Gestione</div>
+    <a class="nav-item" onclick="showView('teatri')" href="#" id="nav-teatri">
       <span class="icon">⬡</span> Teatri
     </a>
-    <a class="nav-item" onclick="showView('spettacoli')" href="#">
+    <a class="nav-item" onclick="showView('spettacoli')" href="#" id="nav-spettacoli">
       <span class="icon">◎</span> Spettacoli
     </a>
-    <a class="nav-item" onclick="showView('prenotazioni')" href="#">
+    <a class="nav-item" onclick="showView('prenotazioni')" href="#" id="nav-prenotazioni">
       <span class="icon">◷</span> Prenotazioni
     </a>
-    <div class="nav-section">Sistema</div>
-    <a class="nav-item" onclick="showView('utenti')" href="#">
+    <div class="nav-section" id="nav-section-sistema">Sistema</div>
+    <a class="nav-item" onclick="showView('utenti')" href="#" id="nav-utenti">
       <span class="icon">○</span> Utenti
     </a>
-    <a class="nav-item" onclick="showView('scanner')" href="#">
+    <a class="nav-item" onclick="showView('scanner')" href="#" id="nav-scanner">
       <span class="icon">▣</span> Scanner QR
     </a>
   </nav>
@@ -998,7 +998,7 @@
     <div class="page-title" id="page-title">Dashboard <span>/ Panoramica</span></div>
     <div style="display:flex;align-items:center;gap:14px">
       <div class="topbar-actions" id="topbar-actions"></div>
-      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.1</div>
+      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.2</div>
     </div>
   </div>
 
@@ -1006,6 +1006,14 @@
 
     <!-- DASHBOARD -->
     <div class="view active" id="view-dashboard">
+      <!-- Benvenuto -->
+      <div id="benvenuto-box" style="display:none;margin-bottom:24px;padding:18px 24px;background:var(--nero);color:white;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-family:Cormorant Garamond,serif;font-size:22px;font-weight:300;letter-spacing:0.04em" id="benvenuto-nome">Benvenuto</div>
+          <div style="font-size:10px;letter-spacing:0.15em;color:rgba(255,255,255,0.4);text-transform:uppercase;margin-top:3px" id="benvenuto-ruolo"></div>
+        </div>
+        <div id="benvenuto-teatro-box" style="display:none;font-size:11px;color:var(--accento);letter-spacing:0.06em" id="benvenuto-teatro"></div>
+      </div>
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-label">Spettacoli attivi</div>
@@ -1408,7 +1416,7 @@ auth.onAuthStateChanged(async user => {
       const doc = await db.collection('utenti').doc(user.uid).get();
       if (doc.exists) {
         currentUserData = doc.data();
-        const ruoli = ['admin', 'editor', 'biglietteria', 'scanner'];
+        const ruoli = ['admin', 'editor', 'biglietteria', 'scanner', 'responsabile_teatro'];
         if (!ruoli.includes(currentUserData.ruolo)) {
           auth.signOut(); return;
         }
@@ -1429,12 +1437,68 @@ function showApp() {
   const av = document.getElementById('user-avatar');
   const nm = document.getElementById('user-display-name');
   const rl = document.getElementById('user-display-role');
+  const ruolo = currentUserData?.ruolo || 'admin';
+  const nomeCompleto = (currentUserData?.nome || '') + (currentUserData?.cognome ? ' ' + currentUserData.cognome : '') || currentUser.email;
+
   if (currentUserData) {
-    nm.textContent = currentUserData.nome || currentUser.email;
-    rl.textContent = currentUserData.ruolo;
+    nm.textContent = nomeCompleto;
+    rl.textContent = ruolo;
     av.textContent = (currentUserData.nome || 'A')[0].toUpperCase();
   }
+
+  // Benvenuto in dashboard
+  const bBox = document.getElementById('benvenuto-box');
+  if (bBox) {
+    bBox.style.display = 'flex';
+    document.getElementById('benvenuto-nome').textContent = 'Benvenuto, ' + nomeCompleto;
+    const ruoloLabel = {
+      admin: 'Amministratore — accesso completo',
+      editor: 'Editor — accesso completo',
+      biglietteria: 'Biglietteria — gestione prenotazioni e mappa posti',
+      scanner: 'Scanner — validazione QR all'ingresso',
+      responsabile_teatro: 'Responsabile Teatro — dashboard e scanner'
+    }[ruolo] || ruolo;
+    document.getElementById('benvenuto-ruolo').textContent = ruoloLabel;
+
+    // Mostra teatro assegnato per responsabile
+    if (ruolo === 'responsabile_teatro' && currentUserData?.teatro_id) {
+      const tBox = document.getElementById('benvenuto-teatro-box');
+      if (tBox) tBox.style.display = 'block';
+    }
+  }
+
+  // Applica permessi nav in base al ruolo
+  applyRolePermissions(ruolo);
   loadAll();
+}
+
+function applyRolePermissions(ruolo) {
+  const perms = {
+    admin:               { teatri:true, spettacoli:true, prenotazioni:true, utenti:true, scanner:true },
+    editor:              { teatri:true, spettacoli:true, prenotazioni:true, utenti:true, scanner:true },
+    biglietteria:        { teatri:false, spettacoli:true, prenotazioni:true, utenti:false, scanner:true },
+    scanner:             { teatri:false, spettacoli:false, prenotazioni:false, utenti:false, scanner:true },
+    responsabile_teatro: { teatri:false, spettacoli:true, prenotazioni:false, utenti:false, scanner:true },
+  };
+  const p = perms[ruolo] || perms.admin;
+
+  const navMap = {
+    'nav-teatri': p.teatri,
+    'nav-spettacoli': p.spettacoli,
+    'nav-prenotazioni': p.prenotazioni,
+    'nav-utenti': p.utenti,
+    'nav-scanner': p.scanner,
+  };
+
+  Object.entries(navMap).forEach(([id, visible]) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = visible ? '' : 'none';
+  });
+
+  // Scanner: vai direttamente allo scanner se è l'unica vista
+  if (ruolo === 'scanner') {
+    setTimeout(() => showView('scanner'), 100);
+  }
 }
 
 function showLoginScreen() {
@@ -2553,9 +2617,24 @@ async function salvaAssegnazione() {
 
 
 // GESTIONE UTENTI
+function toggleTeatroSelect() {
+  const ruolo = document.getElementById('u-ruolo').value;
+  const tg = document.getElementById('u-teatro-group');
+  if (tg) tg.style.display = ruolo === 'responsabile_teatro' ? 'block' : 'none';
+}
+
 function openModalUtente_NEW() {
   ['u-nome','u-cognome','u-email','u-password'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('u-ruolo').value = 'editor';
+  // Popola select teatri
+  const sel = document.getElementById('u-teatro-id');
+  if (sel) {
+    sel.innerHTML = '<option value="">Seleziona teatro...</option>';
+    teatri.forEach(t => {
+      sel.innerHTML += '<option value="'+t.id+'">'+t.nome+' — '+t.citta+'</option>';
+    });
+  }
+  toggleTeatroSelect();
   openModal('modal-utente');
 }
 
@@ -2580,11 +2659,13 @@ async function creaUtente() {
     await secondaryAuth.signOut();
 
     // Salva profilo in Firestore con la sessione admin corrente
+    const teatroId = ruolo === 'responsabile_teatro' ? (document.getElementById('u-teatro-id')?.value || '') : '';
     await db.collection('utenti').doc(uid).set({
       nome,
       cognome,
       email,
       ruolo,
+      teatro_id: teatroId,
       creato_il: firebase.firestore.Timestamp.now(),
       creato_da: currentUser?.email || 'admin'
     });
@@ -2640,15 +2721,26 @@ async function eliminaUtente(uid, nome) {
       </div>
       <div class="form-group">
         <label>Ruolo *</label>
-        <select id="u-ruolo">
+        <select id="u-ruolo" onchange="toggleTeatroSelect()">
           <option value="admin">Admin — accesso completo</option>
           <option value="editor">Editor — accesso completo come admin</option>
-          <option value="biglietteria">Biglietteria — gestione prenotazioni</option>
-          <option value="scanner">Scanner — solo validazione QR</option>
+          <option value="biglietteria">Biglietteria — gestione prenotazioni e mappa posti</option>
+          <option value="scanner">Scanner — solo validazione QR all'ingresso</option>
+          <option value="responsabile_teatro">Responsabile Teatro — dashboard e scanner del suo teatro</option>
         </select>
       </div>
-      <div class="form-hint" style="margin-top:12px;padding:10px;background:rgba(200,169,126,0.08);border-left:3px solid var(--accento)">
-        ⚠ La creazione utente richiede che Firebase Authentication sia configurato con la chiave API corretta. L'utente riceverà le credenziali via email.
+      <div class="form-group" id="u-teatro-group" style="display:none">
+        <label>Teatro assegnato *</label>
+        <select id="u-teatro-id">
+          <option value="">Seleziona teatro...</option>
+        </select>
+        <div class="form-hint">Il responsabile avrà accesso solo a questo teatro</div>
+      </div>
+      <div style="background:rgba(200,169,126,0.06);border:1px solid var(--bordo);padding:12px 14px;margin-top:4px;font-size:10px;color:var(--testo-light);line-height:1.7" id="u-ruolo-desc">
+        <strong style="color:var(--testo)">Admin / Editor:</strong> accesso completo a tutti i moduli<br>
+        <strong style="color:var(--testo)">Biglietteria:</strong> prenotazioni, mappa posti, scanner QR<br>
+        <strong style="color:var(--testo)">Scanner:</strong> solo validazione QR all'ingresso<br>
+        <strong style="color:var(--testo)">Responsabile Teatro:</strong> dashboard e scanner del teatro assegnato
       </div>
     </div>
     <div class="modal-footer">
