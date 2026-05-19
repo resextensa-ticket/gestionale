@@ -1378,6 +1378,10 @@ emailjs.init("WgKJFHS0eJIsKJgFm");
 const auth = firebase.auth();
 const db = firebase.firestore();
 
+// Seconda app Firebase per creare utenti senza perdere la sessione admin
+const secondaryApp = firebase.initializeApp(firebaseConfig, 'secondary');
+const secondaryAuth = secondaryApp.auth();
+
 // ══════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════
@@ -2608,16 +2612,19 @@ async function creaUtente() {
   const ruolo = document.getElementById('u-ruolo').value;
 
   if (!nome || !cognome || !email || !password) { toast('Compila tutti i campi obbligatori', 'error'); return; }
-  if (password.length < 6) { toast('La password deve essere di almeno 6 caratteri', 'error'); return; }
+  if (password.length < 6) { toast('La password deve essere almeno 6 caratteri', 'error'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Email non valida', 'error'); return; }
 
   showLoading('Creazione utente in corso...');
   try {
-    // Crea utente in Firebase Authentication
-    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+    // Usa la seconda app Firebase — la sessione admin rimane intatta
+    const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
     const uid = userCredential.user.uid;
 
-    // Salva profilo in Firestore
+    // Disconnetti subito dalla seconda app
+    await secondaryAuth.signOut();
+
+    // Salva profilo in Firestore con la sessione admin corrente
     await db.collection('utenti').doc(uid).set({
       nome,
       cognome,
@@ -2627,16 +2634,14 @@ async function creaUtente() {
       creato_da: currentUser?.email || 'admin'
     });
 
-    // Disconnetti il nuovo utente (era stato loggato dalla createUserWithEmailAndPassword)
-    // Rieffettua login con l'utente admin corrente
-    // Non serve — createUserWithEmailAndPassword non cambia la sessione corrente in Firebase 9 compat
-
     closeModal('modal-utente');
-    toast('Utente ' + nome + ' ' + cognome + ' creato con ruolo ' + ruolo);
+    toast('Utente ' + nome + ' ' + cognome + ' creato — ruolo: ' + ruolo);
   } catch(e) {
+    await secondaryAuth.signOut().catch(() => {});
     let msg = e.message;
-    if (e.code === 'auth/email-already-in-use') msg = 'Email già in uso';
-    if (e.code === 'auth/weak-password') msg = 'Password troppo debole';
+    if (e.code === 'auth/email-already-in-use') msg = 'Email già in uso da un altro account';
+    if (e.code === 'auth/weak-password') msg = 'Password troppo debole (min. 6 caratteri)';
+    if (e.code === 'auth/invalid-email') msg = 'Email non valida';
     toast('Errore: ' + msg, 'error');
   }
   hideLoading();
