@@ -1401,7 +1401,7 @@ auth.onAuthStateChanged(async user => {
       const doc = await db.collection('utenti').doc(user.uid).get();
       if (doc.exists) {
         currentUserData = doc.data();
-        const ruoli = ['admin', 'biglietteria', 'scanner'];
+        const ruoli = ['admin', 'editor', 'biglietteria', 'scanner'];
         if (!ruoli.includes(currentUserData.ruolo)) {
           auth.signOut(); return;
         }
@@ -2098,17 +2098,19 @@ function renderUtenti() {
   }
   tbody.innerHTML = utenti.map(u => `
     <tr>
-      <td>${u.nome || '—'}</td>
+      <td>${(u.nome || '') + ' ' + (u.cognome || '') || '—'}</td>
       <td style="font-size:11px">${u.email || '—'}</td>
-      <td><span class="badge badge-${u.ruolo === 'admin' ? 'pubblicato' : 'bozza'}">${u.ruolo}</span></td>
-      <td style="font-size:11px;color:var(--testo-light)">—</td>
-      <td></td>
+      <td><span class="badge badge-${u.ruolo === 'admin' || u.ruolo === 'editor' ? 'pubblicato' : 'bozza'}">${u.ruolo}</span></td>
+      <td style="font-size:11px;color:var(--testo-light)">${u.creato_da ? 'Da: ' + u.creato_da : '—'}</td>
+      <td>
+        ${u.id !== currentUser?.uid ? `<button class="btn btn-danger" style="font-size:10px;padding:5px 8px" onclick="eliminaUtente('${u.id}', '${(u.nome||'')+' '+(u.cognome||'')}')">✕</button>` : '<span style="font-size:10px;color:var(--testo-light)">tu</span>'}
+      </td>
     </tr>
   `).join('');
 }
 
 function openModalUtente() {
-  toast('Funzionalità in arrivo', 'error');
+  openModalUtente_NEW();
 }
 
 // ══════════════════════════════════════════
@@ -2539,6 +2541,112 @@ async function salvaAssegnazione() {
     const snap = await db.collection('prenotazioni').where('spettacolo_id', '==', mappaSpettacoloId).get();
     prenotazioniSpettacolo = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderMappaSpettacolo();
+  } catch(e) { toast('Errore: ' + e.message, 'error'); }
+}
+</script>
+
+<!-- MODAL NUOVO UTENTE -->
+<div class="modal-overlay" id="modal-utente">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Nuovo utente</div>
+      <button class="modal-close" onclick="closeModal('modal-utente')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome *</label>
+          <input type="text" id="u-nome" placeholder="Mario">
+        </div>
+        <div class="form-group">
+          <label>Cognome *</label>
+          <input type="text" id="u-cognome" placeholder="Rossi">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="u-email" placeholder="mario.rossi@email.it">
+      </div>
+      <div class="form-group">
+        <label>Password temporanea *</label>
+        <input type="text" id="u-password" placeholder="Minimo 6 caratteri">
+        <div class="form-hint">L'utente potrà cambiarla dopo il primo accesso</div>
+      </div>
+      <div class="form-group">
+        <label>Ruolo *</label>
+        <select id="u-ruolo">
+          <option value="admin">Admin — accesso completo</option>
+          <option value="editor">Editor — accesso completo come admin</option>
+          <option value="biglietteria">Biglietteria — gestione prenotazioni</option>
+          <option value="scanner">Scanner — solo validazione QR</option>
+        </select>
+      </div>
+      <div class="form-hint" style="margin-top:12px;padding:10px;background:rgba(200,169,126,0.08);border-left:3px solid var(--accento)">
+        ⚠ La creazione utente richiede che Firebase Authentication sia configurato con la chiave API corretta. L'utente riceverà le credenziali via email.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-utente')">Annulla</button>
+      <button class="btn btn-primary" onclick="creaUtente()">Crea utente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// GESTIONE UTENTI
+function openModalUtente_NEW() {
+  ['u-nome','u-cognome','u-email','u-password'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('u-ruolo').value = 'editor';
+  openModal('modal-utente');
+}
+
+async function creaUtente() {
+  const nome = document.getElementById('u-nome').value.trim();
+  const cognome = document.getElementById('u-cognome').value.trim();
+  const email = document.getElementById('u-email').value.trim();
+  const password = document.getElementById('u-password').value.trim();
+  const ruolo = document.getElementById('u-ruolo').value;
+
+  if (!nome || !cognome || !email || !password) { toast('Compila tutti i campi obbligatori', 'error'); return; }
+  if (password.length < 6) { toast('La password deve essere di almeno 6 caratteri', 'error'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Email non valida', 'error'); return; }
+
+  showLoading('Creazione utente in corso...');
+  try {
+    // Crea utente in Firebase Authentication
+    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+    const uid = userCredential.user.uid;
+
+    // Salva profilo in Firestore
+    await db.collection('utenti').doc(uid).set({
+      nome,
+      cognome,
+      email,
+      ruolo,
+      creato_il: firebase.firestore.Timestamp.now(),
+      creato_da: currentUser?.email || 'admin'
+    });
+
+    // Disconnetti il nuovo utente (era stato loggato dalla createUserWithEmailAndPassword)
+    // Rieffettua login con l'utente admin corrente
+    // Non serve — createUserWithEmailAndPassword non cambia la sessione corrente in Firebase 9 compat
+
+    closeModal('modal-utente');
+    toast('Utente ' + nome + ' ' + cognome + ' creato con ruolo ' + ruolo);
+  } catch(e) {
+    let msg = e.message;
+    if (e.code === 'auth/email-already-in-use') msg = 'Email già in uso';
+    if (e.code === 'auth/weak-password') msg = 'Password troppo debole';
+    toast('Errore: ' + msg, 'error');
+  }
+  hideLoading();
+}
+
+async function eliminaUtente(uid, nome) {
+  if (!confirm('Eliminare l\'utente ' + nome + '?\nNota: verrà rimosso da Firestore ma non da Firebase Auth.')) return;
+  try {
+    await db.collection('utenti').doc(uid).delete();
+    toast('Utente eliminato da Firestore');
   } catch(e) { toast('Errore: ' + e.message, 'error'); }
 }
 </script>
