@@ -2615,7 +2615,7 @@ async function creaUtente() {
   if (password.length < 6) { toast('La password deve essere almeno 6 caratteri', 'error'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Email non valida', 'error'); return; }
 
-  showLoading('Creazione utente in corso...');
+  document.getElementById("loading-text").textContent = "Creazione utente in corso..."; document.getElementById("loading").classList.add("show");
   try {
     // Usa la seconda app Firebase — la sessione admin rimane intatta
     const userCredential = await secondaryAuth.createUserWithEmailAndPassword(email, password);
@@ -2644,7 +2644,7 @@ async function creaUtente() {
     if (e.code === 'auth/invalid-email') msg = 'Email non valida';
     toast('Errore: ' + msg, 'error');
   }
-  hideLoading();
+  document.getElementById("loading").classList.remove("show");
 }
 
 async function eliminaUtente(uid, nome) {
