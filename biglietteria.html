@@ -248,6 +248,45 @@ input:focus { border-color: var(--nero); }
   </div>
 
   <!-- STEP 4: CONFERMA -->
+  <!-- STEP 4: PAGAMENTO -->
+  <div class="view" id="view-pagamento">
+    <div class="form-section">
+      <h2>Pagamento</h2>
+      <div class="sub">Scegli il metodo di pagamento</div>
+      <div class="riepilogo-box" style="margin-bottom:20px">
+        <div class="riepilogo-titolo" id="pag-titolo">—</div>
+        <div class="riepilogo-meta" id="pag-meta">—</div>
+        <div class="riepilogo-posti" id="pag-posti">—</div>
+        <div style="margin-top:10px;font-size:18px;color:var(--accento);font-family:Cormorant Garamond,serif">Totale: <strong id="pag-totale">—</strong></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+        <div id="btn-stripe" onclick="selectPayment('stripe')" style="border:2px solid var(--bordo);padding:16px;text-align:center;cursor:pointer;transition:all 0.15s">
+          <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;color:var(--testo)">Carta di credito</div>
+          <div style="font-size:9px;color:var(--testo-light)">Visa · Mastercard · Amex</div>
+          <div style="font-size:22px;margin-top:8px">💳</div>
+        </div>
+        <div id="btn-paypal" onclick="selectPayment('paypal')" style="border:2px solid var(--bordo);padding:16px;text-align:center;cursor:pointer;transition:all 0.15s">
+          <div style="font-size:11px;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:6px;color:var(--testo)">PayPal</div>
+          <div style="font-size:9px;color:var(--testo-light)">Conto PayPal o carta</div>
+          <div style="font-size:22px;margin-top:8px">🅿</div>
+        </div>
+      </div>
+      <div id="stripe-form" style="display:none">
+        <div class="form-group">
+          <label>Dati carta</label>
+          <div id="stripe-card-element" style="padding:12px 14px;border:1px solid var(--bordo);background:white;min-height:42px"></div>
+          <div id="stripe-error" style="color:var(--errore);font-size:11px;margin-top:6px"></div>
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="pagaStripe()">Paga con carta ›</button>
+      </div>
+      <div id="paypal-form" style="display:none">
+        <div id="paypal-buttons"></div>
+      </div>
+      <div style="margin-top:16px;padding:10px 14px;background:rgba(200,169,126,0.08);border-left:3px solid var(--accento);font-size:10px;color:var(--testo-light)">🔒 Pagamento sicuro — I tuoi dati sono protetti con crittografia SSL</div>
+      <div style="margin-top:16px"><button class="btn btn-outline" onclick="goToStep(3)">‹ Indietro</button></div>
+    </div>
+  </div>
+
   <div class="view" id="view-conferma">
     <div class="conferma-box">
       <div class="conferma-icon">✓</div>
@@ -272,6 +311,7 @@ input:focus { border-color: var(--nero); }
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
 <script>
@@ -497,6 +537,95 @@ function startTimer() {
   }, 1000);
 }
 
+// Variabili pagamento globali
+let stripeInstance = null;
+let stripeCardElement = null;
+let currentPrenotazioneId = null;
+let currentQrCode = null;
+let currentImportoTotale = 0;
+const STRIPE_PUBLIC_KEY = 'pk_test_SOSTITUISCI_CON_LA_TUA_CHIAVE_PUBBLICA';
+
+function calcolaTotale() {
+  if (!currentSpettacolo?.prezzi) return 0;
+  let tot = 0;
+  postiSelezionati.forEach(p => {
+    const pr = currentSpettacolo.prezzi.find(x => x.settore_id === p.settore_id || x.settore_id === 'tutti');
+    tot += pr ? pr.importo : 0;
+  });
+  return tot;
+}
+
+function selectPayment(method) {
+  document.getElementById('btn-stripe').style.border = method === 'stripe' ? '2px solid var(--nero)' : '2px solid var(--bordo)';
+  document.getElementById('btn-paypal').style.border = method === 'paypal' ? '2px solid var(--nero)' : '2px solid var(--bordo)';
+  document.getElementById('stripe-form').style.display = method === 'stripe' ? 'block' : 'none';
+  document.getElementById('paypal-form').style.display = method === 'paypal' ? 'block' : 'none';
+  if (method === 'stripe' && !stripeInstance) {
+    stripeInstance = Stripe(STRIPE_PUBLIC_KEY);
+    const elements = stripeInstance.elements();
+    stripeCardElement = elements.create('card', { style: { base: { fontFamily: 'DM Mono, monospace', fontSize: '13px', color: '#1A1A1A' } } });
+    stripeCardElement.mount('#stripe-card-element');
+  }
+  if (method === 'paypal') renderPayPalButtons();
+}
+
+function renderPayPalButtons() {
+  const container = document.getElementById('paypal-buttons');
+  if (container.children.length > 0) return;
+  if (typeof paypal === 'undefined') { toast('PayPal non disponibile', 'error'); return; }
+  paypal.Buttons({
+    createOrder: async () => {
+      const functions = firebase.functions();
+      const create = functions.httpsCallable('createPaypalOrder');
+      const result = await create({ importo: currentImportoTotale, descrizione: 'Biglietto ' + currentSpettacolo.titolo, prenotazioneId: currentPrenotazioneId });
+      return result.data.orderId;
+    },
+    onApprove: async (data) => {
+      showLoading('Conferma pagamento...');
+      const functions = firebase.functions();
+      const capture = functions.httpsCallable('capturePaypalOrder');
+      await capture({ orderId: data.orderID, prenotazioneId: currentPrenotazioneId });
+      await completaPagamento('paypal', data.orderID);
+      hideLoading();
+    },
+    onError: (err) => { toast('Errore PayPal: ' + err, 'error'); }
+  }).render('#paypal-buttons');
+}
+
+async function pagaStripe() {
+  if (!stripeInstance || !stripeCardElement) { toast('Seleziona carta di credito', 'error'); return; }
+  showLoading('Elaborazione pagamento...');
+  try {
+    const functions = firebase.functions();
+    const createIntent = functions.httpsCallable('createStripePaymentIntent');
+    const result = await createIntent({ importo: currentImportoTotale, descrizione: 'Biglietto ' + currentSpettacolo.titolo, metadati: { prenotazione_id: currentPrenotazioneId } });
+    const { error, paymentIntent } = await stripeInstance.confirmCardPayment(result.data.clientSecret, { payment_method: { card: stripeCardElement } });
+    if (error) { document.getElementById('stripe-error').textContent = error.message; hideLoading(); return; }
+    if (paymentIntent.status === 'succeeded') await completaPagamento('stripe', paymentIntent.id);
+  } catch(e) { toast('Errore: ' + e.message, 'error'); }
+  hideLoading();
+}
+
+async function completaPagamento(metodo, providerId) {
+  await db.collection('prenotazioni').doc(currentPrenotazioneId).update({ stato: 'confermata', metodo_pagamento: metodo, 'pagamento.stato': 'completato', 'pagamento.provider_id': providerId, 'pagamento.data': firebase.firestore.Timestamp.now() });
+  const nome = document.getElementById('f-nome').value;
+  const cognome = document.getElementById('f-cognome').value;
+  const email = document.getElementById('f-email').value;
+  const d = currentSpettacolo.data_ora.toDate();
+  const prenotazione = { cliente: { nome, cognome, email, telefono: document.getElementById('f-telefono').value }, biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto })) };
+  mostraConferma(currentPrenotazioneId, currentQrCode, prenotazione, d);
+  try {
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      cliente_nome: nome + ' ' + cognome, cliente_email: email,
+      spettacolo_titolo: currentSpettacolo.titolo,
+      spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
+      teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
+      posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
+      qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(currentQrCode)
+    });
+  } catch(e) { console.warn('Email non inviata:', e); }
+}
+
 async function confermaPrenotazione() {
   const nome = document.getElementById('f-nome').value.trim();
   const cognome = document.getElementById('f-cognome').value.trim();
@@ -505,7 +634,10 @@ async function confermaPrenotazione() {
   if (!nome || !cognome || !email) { toast('Compila i campi obbligatori', 'error'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Email non valida', 'error'); return; }
   if (!postiSelezionati.length) { toast('Nessun posto selezionato', 'error'); return; }
-  showLoading('Salvataggio prenotazione...');
+  currentImportoTotale = calcolaTotale();
+  const isGratuito = currentImportoTotale === 0;
+  if (isGratuito) {
+    showLoading('Salvataggio prenotazione...');
   try {
     const qrCode = 'RX-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
     const d = currentSpettacolo.data_ora.toDate();
@@ -541,6 +673,33 @@ async function confermaPrenotazione() {
     }
   } catch(e) { toast('Errore: ' + e.message, 'error'); }
   hideLoading();
+  } else {
+    // Flusso a pagamento
+    showLoading('Preparazione pagamento...');
+    try {
+      const qrCode = 'RX-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+      const d = currentSpettacolo.data_ora.toDate();
+      const ref = await db.collection('prenotazioni').add({
+        spettacolo_id: currentSpettacolo.id,
+        cliente: { nome, cognome, email, telefono },
+        biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto, importo: currentImportoTotale / postiSelezionati.length })),
+        importo_totale: currentImportoTotale,
+        metodo_pagamento: 'in_attesa',
+        pagamento: { provider_id: '', stato: 'in_attesa', data: firebase.firestore.Timestamp.now() },
+        qr_code: qrCode, canale: 'online', stato: 'prenotata',
+        creata_il: firebase.firestore.Timestamp.now()
+      });
+      currentPrenotazioneId = ref.id;
+      currentQrCode = qrCode;
+      if (timerInterval) clearInterval(timerInterval);
+      document.getElementById('pag-titolo').textContent = currentSpettacolo.titolo;
+      document.getElementById('pag-meta').textContent = currentTeatro.nome + ' · ' + d.toLocaleDateString('it',{day:'numeric',month:'long'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('pag-posti').textContent = 'Posti: ' + postiSelezionati.map(p => 'Fila ' + p.fila + ' posto ' + p.posto).join(', ');
+      document.getElementById('pag-totale').textContent = '€ ' + currentImportoTotale.toFixed(2);
+      goToStep(4);
+    } catch(e) { toast('Errore: ' + e.message, 'error'); }
+    hideLoading();
+  }
 }
 
 function mostraConferma(docId, qrCode, prenotazione, dataSpettacolo) {

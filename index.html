@@ -998,7 +998,7 @@
     <div class="page-title" id="page-title">Dashboard <span>/ Panoramica</span></div>
     <div style="display:flex;align-items:center;gap:14px">
       <div class="topbar-actions" id="topbar-actions"></div>
-      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.2</div>
+      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.3</div>
     </div>
   </div>
 
@@ -1288,7 +1288,7 @@
       <div class="form-row">
         <div class="form-group">
           <label>Teatro *</label>
-          <select id="s-teatro">
+          <select id="s-teatro" onchange="aggiornaPrezzSettori()">
             <option value="">Seleziona teatro...</option>
           </select>
         </div>
@@ -1315,7 +1315,9 @@
         <label for="s-gratuito">Spettacolo gratuito</label>
       </div>
       <div id="s-prezzi-section" style="display:none">
-        <div class="form-hint" style="margin-bottom:10px">Prezzi per settore (verranno caricati dopo aver selezionato il teatro)</div>
+        <div style="font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--testo-light);margin-bottom:10px">Prezzi per settore</div>
+        <div id="s-prezzi-container"></div>
+        <div class="form-hint" style="margin-top:6px">Seleziona prima il teatro per caricare i settori</div>
       </div>
       <div class="checkbox-group" id="s-prenotazione-group" style="display:none">
         <input type="checkbox" id="s-prenotazione-obbligatoria" checked>
@@ -1455,7 +1457,7 @@ function showApp() {
       admin: 'Amministratore — accesso completo',
       editor: 'Editor — accesso completo',
       biglietteria: 'Biglietteria — gestione prenotazioni e mappa posti',
-      scanner: "Scanner — validazione QR all'ingresso",
+      scanner: 'Scanner — validazione QR all'ingresso',
       responsabile_teatro: 'Responsabile Teatro — dashboard e scanner'
     }[ruolo] || ruolo;
     document.getElementById('benvenuto-ruolo').textContent = ruoloLabel;
@@ -1980,7 +1982,9 @@ function renderSpettacoli() {
         <td><div class="td-title">${s.titolo}</div></td>
         <td>${teatro ? teatro.nome : '<span class="text-muted">—</span>'}</td>
         <td>${data ? data.toLocaleDateString('it') + ' ' + data.toLocaleTimeString('it', {hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-        <td><span class="badge badge-${s.prezzi && s.prezzi[0]?.importo === 0 ? 'gratuito' : 'pubblicato'}">${s.prezzi && s.prezzi[0]?.importo === 0 ? 'Gratuito' : 'A pagamento'}</span></td>
+        <td><span class="badge badge-${!s.prezzi || s.prezzi[0]?.importo === 0 ? 'gratuito' : 'pubblicato'}">
+  ${!s.prezzi || s.prezzi[0]?.importo === 0 ? 'Gratuito' : '€ ' + Math.min(...(s.prezzi||[]).map(p=>p.importo)).toFixed(2) + (s.prezzi.length > 1 ? ' — ' + Math.max(...(s.prezzi||[]).map(p=>p.importo)).toFixed(2) : '')}
+</span></td>
         <td><span class="badge badge-${s.stato}">${s.stato}</span></td>
         <td>
           <div style="display:flex;align-items:center;gap:8px">
@@ -2037,11 +2041,39 @@ function openModalSpettacolo(id = null) {
   openModal('modal-spettacolo');
 }
 
-function editSpettacolo(id) { openModalSpettacolo(id); }
+function editSpettacolo(id) {
+  const s = spettacoli.find(x => x.id === id);
+  if (s && s.prezzi) {
+    window._editPrezzi = {};
+    s.prezzi.forEach(p => { window._editPrezzi[p.settore_id] = p.importo; });
+  }
+  openModalSpettacolo(id);
+}
 
 function toggleGratuito() {
   const isGratuito = document.getElementById('s-gratuito').checked;
   document.getElementById('s-prenotazione-group').style.display = isGratuito ? 'flex' : 'none';
+  document.getElementById('s-prezzi-section').style.display = isGratuito ? 'none' : 'block';
+  if (!isGratuito) aggiornaPrezzSettori();
+}
+
+function aggiornaPrezzSettori() {
+  const teatroId = document.getElementById('s-teatro').value;
+  const container = document.getElementById('s-prezzi-container');
+  if (!teatroId || !container) return;
+  const teatro = teatri.find(t => t.id === teatroId);
+  if (!teatro) return;
+  container.innerHTML = (teatro.settori || []).map(s => `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;padding:10px 14px;background:white;border:1px solid var(--bordo)">
+      <div style="font-size:11px;font-family:Cormorant Garamond,serif;flex:1">${s.nome}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <label style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--testo-light);margin:0">€</label>
+        <input type="number" id="prezzo-${s.id}" placeholder="0.00" min="0" step="0.50"
+          style="width:80px;padding:7px 10px;border:1px solid var(--bordo);font-family:DM Mono,monospace;font-size:12px;outline:none"
+          value="${window._editPrezzi?.[s.id] || ''}">
+      </div>
+    </div>
+  `).join('');
 }
 
 async function salvaSpettacolo() {
@@ -2051,9 +2083,18 @@ async function salvaSpettacolo() {
   if (!titolo || !teatroId || !dataVal) { toast('Compila i campi obbligatori', 'error'); return; }
   const isGratuito = document.getElementById('s-gratuito').checked;
   const teatro = teatri.find(t => t.id === teatroId);
-  const prezzi = isGratuito
-    ? [{ settore_id: 'tutti', nome: 'Ingresso', importo: 0 }]
-    : [{ settore_id: 'tutti', nome: 'Ingresso', importo: 0 }]; // placeholder per ora
+  let prezzi = [];
+  if (isGratuito) {
+    prezzi = [{ settore_id: 'tutti', nome: 'Ingresso gratuito', importo: 0 }];
+  } else {
+    prezzi = (teatro?.settori || []).map(s => {
+      const val = parseFloat(document.getElementById('prezzo-' + s.id)?.value) || 0;
+      return { settore_id: s.id, nome: s.nome, importo: val };
+    });
+    if (prezzi.every(p => p.importo === 0)) {
+      toast('Inserisci almeno un prezzo per i settori', 'error'); return;
+    }
+  }
 
   const data = {
     titolo,
