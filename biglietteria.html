@@ -634,8 +634,12 @@ async function confermaPrenotazione() {
   if (!nome || !cognome || !email) { toast('Compila i campi obbligatori', 'error'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Email non valida', 'error'); return; }
   if (!postiSelezionati.length) { toast('Nessun posto selezionato', 'error'); return; }
+  // Ricarica prezzi freschi da Firestore
+  const spFresh = await db.collection('spettacoli').doc(currentSpettacolo.id).get();
+  if (spFresh.exists) currentSpettacolo = { id: spFresh.id, ...spFresh.data() };
   currentImportoTotale = calcolaTotale();
-  const isGratuito = currentImportoTotale === 0;
+  console.log('Totale calcolato:', currentImportoTotale, 'Prezzi:', JSON.stringify(currentSpettacolo.prezzi), 'Posti:', JSON.stringify(postiSelezionati.map(p=>p.settore_id)));
+  const isGratuito = !currentSpettacolo.prezzi || currentSpettacolo.prezzi.length === 0 || currentImportoTotale === 0;
   if (isGratuito) {
     showLoading('Salvataggio prenotazione...');
   try {
