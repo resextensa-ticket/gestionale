@@ -199,6 +199,7 @@ input:focus { border-color: var(--nero); }
         <div class="selezione-label">Posti selezionati</div>
         <div class="selezione-posti"><span id="sel-count">0</span><span style="font-size:16px;color:var(--testo-light)">/4</span></div>
         <div class="selezione-lista" id="sel-lista">Clicca sui posti</div>
+        <div id="sel-totale" style="display:none;margin-top:8px;font-size:13px;color:var(--accento-dark);font-family:Cormorant Garamond,serif;font-weight:600"></div>
       </div>
     </div>
     <div class="timer-bar" id="timer-bar">
@@ -512,6 +513,13 @@ function updateSelezione() {
   document.getElementById('btn-continua-mappa').disabled = postiSelezionati.length === 0;
   const warn = document.getElementById('max-warning');
   warn.textContent = postiSelezionati.length >= MAX_POSTI ? 'Massimo ' + MAX_POSTI + ' posti raggiunto' : postiSelezionati.length > 0 ? (MAX_POSTI - postiSelezionati.length) + ' posti ancora selezionabili' : '';
+  // Mostra totale se lo spettacolo è a pagamento
+  const totEl = document.getElementById('sel-totale');
+  if (totEl && currentSpettacolo?.prezzi) {
+    const tot = calcolaTotale();
+    totEl.textContent = tot > 0 ? 'Totale: € ' + tot.toFixed(2) : '';
+    totEl.style.display = tot > 0 ? 'block' : 'none';
+  }
 }
 
 function goToDati() {
@@ -605,6 +613,106 @@ async function pagaStripe() {
   } catch(e) { toast('Errore: ' + e.message, 'error'); }
   hideLoading();
 }
+
+async function completaPagamento(metodo, providerId) {
+  await db.collection('prenotazioni').doc(currentPrenotazioneId).update({ stato: 'confermata', metodo_pagamento: metodo, 'pagamento.stato': 'completato', 'pagamento.provider_id': providerId, 'pagamento.data': firebase.firestore.Timestamp.now() });
+  const nome = document.getElementById('f-nome').value;
+  const cognome = document.getElementById('f-cognome').value;
+  const email = document.getElementById('f-email').value;
+  const d = currentSpettacolo.data_ora.toDate();
+  const prenotazione = { cliente: { nome, cognome, email, telefono: document.getElementById('f-telefono').value }, biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto })) };
+  mostraConferma(currentPrenotazioneId, currentQrCode, prenotazione, d);
+  try {
+    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+      cliente_nome: nome + ' ' + cognome, cliente_email: email,
+      spettacolo_titolo: currentSpettacolo.titolo,
+      spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
+      teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
+      posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
+      qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(currentQrCode)
+    });
+  } catch(e) { console.warn('Email non inviata:', e); }
+}
+
+async function confermaPrenotazione() {
+  const nome = document.getElementById('f-nome').value.trim();
+  const cognome = document.getElementById('f-cognome').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const telefono = document.getElementById('f-telefono').value.trim();
+  if (!nome || !cognome || !email) { toast('Compila i campi obbligatori', 'error'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('Email non valida', 'error'); return; }
+  if (!postiSelezionati.length) { toast('Nessun posto selezionato', 'error'); return; }
+
+  // Ricarica prezzi freschi da Firestore
+  showLoading('Verifica in corso...');
+  const spFresh = await db.collection('spettacoli').doc(currentSpettacolo.id).get();
+  if (spFresh.exists) currentSpettacolo = { id: spFresh.id, ...spFresh.data() };
+  currentImportoTotale = calcolaTotale();
+  const isGratuito = !currentSpettacolo.prezzi || currentSpettacolo.prezzi.length === 0 || currentImportoTotale === 0;
+  hideLoading();
+
+  const qrCode = 'RX-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2,6).toUpperCase();
+  const d = currentSpettacolo.data_ora.toDate();
+
+  if (isGratuito) {
+    // ── FLUSSO GRATUITO ──
+    showLoading('Salvataggio prenotazione...');
+    try {
+      const prenotazione = {
+        spettacolo_id: currentSpettacolo.id,
+        cliente: { nome, cognome, email, telefono },
+        biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto, importo: 0 })),
+        importo_totale: 0,
+        metodo_pagamento: 'gratuito',
+        pagamento: { provider_id: '', stato: 'completato', data: firebase.firestore.Timestamp.now() },
+        qr_code: qrCode, canale: 'online', stato: 'confermata',
+        creata_il: firebase.firestore.Timestamp.now()
+      };
+      const ref = await db.collection('prenotazioni').add(prenotazione);
+      if (timerInterval) clearInterval(timerInterval);
+      mostraConferma(ref.id, qrCode, prenotazione, d);
+      try {
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+          cliente_nome: nome + ' ' + cognome, cliente_email: email,
+          spettacolo_titolo: currentSpettacolo.titolo,
+          spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
+          teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
+          posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
+          qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qrCode)
+        });
+        toast('Email inviata a ' + email);
+      } catch(emailErr) { toast('Prenotazione salvata. Email non inviata.', 'error'); }
+    } catch(e) { toast('Errore: ' + e.message, 'error'); }
+    hideLoading();
+
+  } else {
+    // ── FLUSSO PAGAMENTO ──
+    showLoading('Preparazione pagamento...');
+    try {
+      const ref = await db.collection('prenotazioni').add({
+        spettacolo_id: currentSpettacolo.id,
+        cliente: { nome, cognome, email, telefono },
+        biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto, importo: currentImportoTotale / postiSelezionati.length })),
+        importo_totale: currentImportoTotale,
+        metodo_pagamento: 'in_attesa',
+        pagamento: { provider_id: '', stato: 'in_attesa', data: firebase.firestore.Timestamp.now() },
+        qr_code: qrCode, canale: 'online', stato: 'prenotata',
+        creata_il: firebase.firestore.Timestamp.now()
+      });
+      currentPrenotazioneId = ref.id;
+      currentQrCode = qrCode;
+      if (timerInterval) clearInterval(timerInterval);
+      // Aggiorna riepilogo pagamento
+      document.getElementById('pag-titolo').textContent = currentSpettacolo.titolo;
+      document.getElementById('pag-meta').textContent = currentTeatro.nome + ' · ' + d.toLocaleDateString('it',{day:'numeric',month:'long'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('pag-posti').textContent = 'Posti: ' + postiSelezionati.map(p => 'Fila ' + p.fila + ' posto ' + p.posto).join(', ');
+      document.getElementById('pag-totale').textContent = '€ ' + currentImportoTotale.toFixed(2);
+      goToStep(4);
+    } catch(e) { toast('Errore: ' + e.message, 'error'); }
+    hideLoading();
+  }
+}
+
 
 async function completaPagamento(metodo, providerId) {
   await db.collection('prenotazioni').doc(currentPrenotazioneId).update({ stato: 'confermata', metodo_pagamento: metodo, 'pagamento.stato': 'completato', 'pagamento.provider_id': providerId, 'pagamento.data': firebase.firestore.Timestamp.now() });
