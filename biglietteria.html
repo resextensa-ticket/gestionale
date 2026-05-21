@@ -886,8 +886,21 @@ function nuovaPrenotazione() {
   postiSelezionati = [];
   currentSpettacolo = null;
   currentTeatro = null;
+  postiPrenotati = new Set();
   ['f-nome','f-cognome','f-email','f-telefono'].forEach(id => document.getElementById(id).value = '');
   stripeInstance = null; stripeCardElement = null; currentPrenotazioneId = null; currentQrCode = null; currentImportoTotale = 0;
+  // Ricarica lista spettacoli freschi da Firestore
+  const now = new Date();
+  db.collection('spettacoli')
+    .where('stato','==','pubblicato')
+    .orderBy('data_ora','asc')
+    .get()
+    .then(snap => {
+      spettacoli = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(s => s.data_ora && s.data_ora.toDate() > now);
+      renderSpettacoli();
+    });
   goToStep(1);
 }
 
