@@ -462,8 +462,15 @@ async function openMappa(spettacolo) {
       .where('stato','in',['prenotata','confermata','utilizzata','riservata','assegnata'])
       .get();
     postiPrenotati = new Set();
+    const ora = new Date();
     snap.docs.forEach(d => {
-      (d.data().biglietti || []).forEach(b => postiPrenotati.add(`${b.settore_id}-${b.fila}-${b.posto}`));
+      const p = d.data();
+      // Ignora prenotazioni in_attesa scadute
+      if (p.stato === 'prenotata' && p.pagamento?.stato === 'in_attesa' && p.scade_il) {
+        const scade = p.scade_il.toDate();
+        if (scade < ora) return; // scaduta — posto libero
+      }
+      (p.biglietti || []).forEach(b => postiPrenotati.add(`${b.settore_id}-${b.fila}-${b.posto}`));
     });
     const d = spettacolo.data_ora.toDate();
     document.getElementById('mappa-titolo').textContent = spettacolo.titolo;
@@ -841,6 +848,7 @@ async function confermaPrenotazione() {
         importo_totale: currentImportoTotale, metodo_pagamento: 'in_attesa',
         pagamento: { provider_id: '', stato: 'in_attesa', data: firebase.firestore.Timestamp.now() },
         qr_code: qrCode, canale: 'online', stato: 'prenotata',
+        scade_il: firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000)),
         creata_il: firebase.firestore.Timestamp.now()
       });
       currentPrenotazioneId = ref.id;
