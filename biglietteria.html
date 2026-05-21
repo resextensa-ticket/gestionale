@@ -686,14 +686,6 @@ async function completaPagamento(metodo, providerId) {
   } catch(e) { console.warn('Email non inviata:', e); }
 }
 
-// Variabili pagamento globali
-let stripeInstance = null;
-let stripeCardElement = null;
-let currentPrenotazioneId = null;
-let currentQrCode = null;
-let currentImportoTotale = 0;
-const STRIPE_PUBLIC_KEY = 'pk_test_SOSTITUISCI_CON_LA_TUA_CHIAVE_PUBBLICA';
-
 function calcolaTotale() {
   if (!currentSpettacolo || !currentSpettacolo.prezzi) return 0;
   let tot = 0;
