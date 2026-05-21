@@ -361,7 +361,6 @@ input:focus { border-color: var(--nero); }
 </div>
 <div class="toast-container" id="toast-container"></div>
 
-<script src="https://js.stripe.com/v3/"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-functions-compat.js"></script>
@@ -711,14 +710,26 @@ function selectPayment(method) {
   document.getElementById('stripe-form').style.display = method === 'stripe' ? 'block' : 'none';
   document.getElementById('paypal-form').style.display = method === 'paypal' ? 'block' : 'none';
   if (method === 'stripe' && !stripeInstance) {
-    stripeInstance = Stripe(STRIPE_PUBLIC_KEY);
-    const elements = stripeInstance.elements();
-    stripeCardElement = elements.create('card', {
-      style: { base: { fontFamily: 'DM Mono, monospace', fontSize: '13px', color: '#1A1A1A' } }
-    });
-    stripeCardElement.mount('#stripe-card-element');
+    // Carica Stripe dinamicamente solo quando serve
+    if (typeof Stripe === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'https://js.stripe.com/v3/';
+      s.onload = () => initStripeElements();
+      document.head.appendChild(s);
+    } else {
+      initStripeElements();
+    }
   }
   if (method === 'paypal') renderPayPalButtons();
+}
+
+function initStripeElements() {
+  stripeInstance = Stripe(STRIPE_PUBLIC_KEY);
+  const elements = stripeInstance.elements();
+  stripeCardElement = elements.create('card', {
+    style: { base: { fontFamily: 'DM Mono, monospace', fontSize: '13px', color: '#1A1A1A' } }
+  });
+  stripeCardElement.mount('#stripe-card-element');
 }
 
 function renderPayPalButtons() {
