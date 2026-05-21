@@ -1135,8 +1135,9 @@
               <th>Cliente</th>
               <th>Spettacolo</th>
               <th>Posti</th>
+              <th>Importo</th>
               <th>Stato</th>
-              <th>Data prenotazione</th>
+              <th>Data</th>
               <th></th>
             </tr>
           </thead>
@@ -2161,7 +2162,7 @@ function renderPrenotazioni() {
 function renderPrenotazioniList(list) {
   const tbody = document.getElementById('prenotazioni-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">◷</div><div class="empty-title">Nessuna prenotazione</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">◷</div><div class="empty-title">Nessuna prenotazione</div></div></td></tr>`;
     return;
   }
   tbody.innerHTML = list.map((p, i) => {
@@ -2177,11 +2178,12 @@ function renderPrenotazioniList(list) {
         </td>
         <td>${sp ? sp.titolo : '—'}</td>
         <td><span style="font-size:11px">${posti || '—'}</span></td>
+        <td style="font-size:11px;font-family:'DM Mono',monospace">${p.importo_totale > 0 ? '€ ' + Number(p.importo_totale).toFixed(2) : '<span style=\"color:var(--testo-light)\">—</span>'}</td>
         <td><span class="badge badge-${p.stato}">${p.stato}</span></td>
         <td style="font-size:11px;color:var(--testo-light)">${data}</td>
         <td>
           <div class="flex gap-2">
-            ${p.stato === 'confermata' ? `<button class="btn btn-ghost" style="font-size:10px;padding:5px 8px" onclick="cancellaPrenotazione('${p.id}')">✕ Annulla</button>` : ''}
+            ${!['annullata','utilizzata'].includes(p.stato) ? `<button class="btn btn-ghost" style="font-size:10px;padding:5px 8px;color:var(--errore)" onclick="cancellaPrenotazione('${p.id}')">✕ Annulla</button>` : ''}
           </div>
         </td>
       </tr>
@@ -2190,7 +2192,11 @@ function renderPrenotazioniList(list) {
 }
 
 async function cancellaPrenotazione(id) {
-  if (!confirm('Annullare questa prenotazione?')) return;
+  const pren = prenotazioni.find(p => p.id === id);
+  const msg = pren?.stato === 'prenotata'
+    ? 'Annullare questa prenotazione in attesa di pagamento? I posti torneranno disponibili.'
+    : 'Annullare questa prenotazione confermata? Nota: il rimborso eventuale va gestito manualmente.';
+  if (!confirm(msg)) return;
   try {
     await db.collection('prenotazioni').doc(id).update({ stato: 'annullata' });
     toast('Prenotazione annullata');
