@@ -998,7 +998,7 @@
     <div class="page-title" id="page-title">Dashboard <span>/ Panoramica</span></div>
     <div style="display:flex;align-items:center;gap:14px">
       <div class="topbar-actions" id="topbar-actions"></div>
-      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.4</div>
+      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.5</div>
     </div>
   </div>
 
@@ -1125,6 +1125,7 @@
             <option value="annullata">Annullata</option>
             <option value="utilizzata">Utilizzata</option>
           </select>
+          <button class="btn btn-ghost" id="btn-elimina-annullate" style="color:var(--errore);display:none" onclick="eliminaAnnullate()">Elimina annullate</button>
         </div>
       </div>
       <div class="table-wrap">
@@ -1496,6 +1497,8 @@ function applyRolePermissions(ruolo) {
     responsabile_teatro: { teatri:false, spettacoli:true, prenotazioni:false, utenti:false, scanner:true },
   };
   const p = perms[ruolo] || perms.admin;
+  const _bEl = document.getElementById('btn-elimina-annullate');
+  if (_bEl) _bEl.style.display = (ruolo === 'admin' || ruolo === 'editor' || !perms[ruolo]) ? '' : 'none';
 
   const navMap = {
     'nav-teatri': p.teatri,
@@ -2200,6 +2203,22 @@ function renderPrenotazioniList(list) {
       </tr>
     `;
   }).join('');
+}
+
+async function eliminaAnnullate() {
+  const daEliminare = prenotazioni.filter(p => p.stato === 'annullata');
+  if (!daEliminare.length) { toast('Nessuna prenotazione annullata da eliminare'); return; }
+  if (!confirm('Eliminare definitivamente ' + daEliminare.length + ' prenotazioni annullate? Questa azione non può essere annullata.')) return;
+  try {
+    for (let i = 0; i < daEliminare.length; i += 400) {
+      const batch = db.batch();
+      daEliminare.slice(i, i + 400).forEach(p => batch.delete(db.collection('prenotazioni').doc(p.id)));
+      await batch.commit();
+    }
+    toast(daEliminare.length + ' prenotazioni annullate eliminate');
+  } catch(e) {
+    toast('Errore: ' + e.message, 'error');
+  }
 }
 
 async function cancellaPrenotazione(id) {
