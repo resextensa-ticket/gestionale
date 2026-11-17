@@ -553,14 +553,12 @@ function togglePosto(div, key, settoreId, fila, numero) {
     div.classList.remove('selezionato');
     const c = getBiglSeatColors('libero', false);
     div.innerHTML = makeSeatSVG(numero, c.body, c.arm, c.back, c.num);
-    div.addEventListener('click', () => togglePosto(div, key, settoreId, fila, numero));
   } else {
     if (postiSelezionati.length >= MAX_POSTI) { toast('Massimo ' + MAX_POSTI + ' posti selezionabili', 'error'); return; }
     postiSelezionati.push({ key, settore_id: settoreId, fila, posto: numero });
     div.classList.add('selezionato');
     const c = getBiglSeatColors('libero', true);
     div.innerHTML = makeSeatSVG(numero, c.body, c.arm, c.back, c.num);
-    div.addEventListener('click', () => togglePosto(div, key, settoreId, fila, numero));
   }
   updateSelezione();
 }
