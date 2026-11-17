@@ -511,10 +511,9 @@ function renderMappa() {
       // Numerazione 1 a sinistra, palco in basso
       const _useSc2 = isFilaConScalette(settore.id, fila.fila, (fila.posti||[]).length);
       if (_useSc2) { const sc = makeScalettaEl('laterale'); row.appendChild(sc); }
-      let _scIdx2 = 0;
-      (fila.posti || []).forEach(posto => {
-        _scIdx2++;
-        if (_useSc2 && _scIdx2 === 13) row.appendChild(makeScalettaEl('centrale'));
+      const _scCen2 = scalettaCentraleIdx(settore.id, fila.fila, fila.posti);
+      (fila.posti || []).forEach((posto, _pi2) => {
+        if (_pi2 === _scCen2) row.appendChild(makeScalettaEl('centrale'));
         const key = settore.id+'-'+fila.fila+'-'+posto.numero;
         const div = document.createElement('div');
         div.className = 'seat';
@@ -953,6 +952,18 @@ function isFilaConScalette(settoreId, filaLetter, numPosti) {
   // Solo platea Abeliano (settore 'sala') con 24 posti, file A-M
   return settoreId === 'sala' && numPosti === 24 &&
     ['A','B','C','D','E','F','G','H','I','L','M'].includes(filaLetter);
+}
+
+// Indice (0-based) davanti al quale va la scaletta centrale; -1 se assente.
+// Fila A-M: prima del 13o posto. Fila N (30 posti: 1C 1B 1A, 1-12, scaletta, 13-24, 24A 24B 24C): tra il 12 e il 13.
+function scalettaCentraleIdx(settoreId, filaLetter, posti) {
+  posti = posti || [];
+  if (isFilaConScalette(settoreId, filaLetter, posti.length)) return 12;
+  if (settoreId === 'sala' && filaLetter === 'N' && posti.length === 30) {
+    const i = posti.findIndex(p => String(p.numero) === '12');
+    return (String(posti[0].numero) === '1C' && i >= 0) ? i + 1 : 15;
+  }
+  return -1;
 }
 function showLoading(text) { document.getElementById('loading-text').textContent = text||'Caricamento...'; document.getElementById('loading').classList.add('show'); }
 function hideLoading() { document.getElementById('loading').classList.remove('show'); }
