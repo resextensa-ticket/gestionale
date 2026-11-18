@@ -943,11 +943,15 @@
     </div>
     <div class="form-group">
       <label>Password</label>
-      <input type="text" id="login-password" placeholder="••••••••" style="letter-spacing:0.2em">
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
     </div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="doLogin()">
       Accedi
     </button>
+    <div style="text-align:center;margin-top:14px">
+      <a href="#" id="login-reset-link" onclick="resetPassword(event)" style="font-size:12px;color:var(--testo-light);text-decoration:underline">Password dimenticata? Reimposta</a>
+    </div>
+    <div id="login-info" style="display:none;margin-top:12px;font-size:12px;line-height:1.5;color:var(--testo-light);text-align:center"></div>
   </div>
 </div>
 
@@ -998,7 +1002,7 @@
     <div class="page-title" id="page-title">Dashboard <span>/ Panoramica</span></div>
     <div style="display:flex;align-items:center;gap:14px">
       <div class="topbar-actions" id="topbar-actions"></div>
-      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.5</div>
+      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.6</div>
     </div>
   </div>
 
@@ -1533,6 +1537,33 @@ async function doLogin() {
   } catch(e) {
     err.style.display = 'block';
   }
+}
+
+async function resetPassword(ev) {
+  if (ev) ev.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const info = document.getElementById('login-info');
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  info.style.display = 'block';
+  if (!email || email.indexOf('@') < 1) {
+    info.textContent = 'Inserisci prima la tua email nel campo qui sopra, poi premi "Reimposta".';
+    return;
+  }
+  try {
+    await auth.sendPasswordResetEmail(email);
+  } catch(e) {
+    if (e.code === 'auth/too-many-requests') {
+      info.textContent = 'Troppi tentativi. Riprova tra qualche minuto.';
+      return;
+    }
+    if (e.code === 'auth/invalid-email') {
+      info.textContent = 'Indirizzo email non valido.';
+      return;
+    }
+    // altri errori (es. utente inesistente): stesso messaggio, per non rivelare quali email sono registrate
+  }
+  info.textContent = 'Se l\'indirizzo è registrato, riceverai a breve una email con il link per reimpostare la password. Controlla anche la cartella spam.';
 }
 
 async function doLogout() {
