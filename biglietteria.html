@@ -670,6 +670,30 @@ async function pagaStripe() {
   hideLoading();
 }
 
+// ── Un biglietto (QR) per ogni posto ──
+function codiceBiglietto(qrBase, i) { return qrBase + '-' + (i + 1); }
+
+async function inviaEmailBiglietti(nome, cognome, email, d, qrBase) {
+  const n = postiSelezionati.length;
+  let ok = 0;
+  for (let i = 0; i < n; i++) {
+    const p = postiSelezionati[i];
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        cliente_nome: nome + ' ' + cognome, cliente_email: email,
+        spettacolo_titolo: currentSpettacolo.titolo,
+        spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
+        teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
+        posti: 'Fila ' + p.fila + ' Posto ' + p.posto + (n > 1 ? ' (biglietto ' + (i + 1) + ' di ' + n + ')' : ''),
+        qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(codiceBiglietto(qrBase, i))
+      });
+      ok++;
+    } catch (e) { console.warn('Email non inviata (biglietto ' + (i + 1) + '):', e); }
+  }
+  if (ok < n) throw new Error('Email inviate ' + ok + ' su ' + n);
+  return ok;
+}
+
 async function completaPagamento(metodo, providerId) {
   await db.collection('prenotazioni').doc(currentPrenotazioneId).update({ stato: 'confermata', metodo_pagamento: metodo, 'pagamento.stato': 'completato', 'pagamento.provider_id': providerId, 'pagamento.data': firebase.firestore.Timestamp.now() });
   const nome = document.getElementById('f-nome').value;
@@ -679,14 +703,7 @@ async function completaPagamento(metodo, providerId) {
   const prenotazione = { cliente: { nome, cognome, email, telefono: document.getElementById('f-telefono').value }, biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto })) };
   mostraConferma(currentPrenotazioneId, currentQrCode, prenotazione, d);
   try {
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      cliente_nome: nome + ' ' + cognome, cliente_email: email,
-      spettacolo_titolo: currentSpettacolo.titolo,
-      spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
-      teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
-      posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
-      qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(currentQrCode)
-    });
+    await inviaEmailBiglietti(nome, cognome, email, d, currentQrCode);
   } catch(e) { console.warn('Email non inviata:', e); }
 }
 
@@ -775,14 +792,7 @@ async function finalizzaPrenotazione(metodo, providerId) {
   const prenotazione = { cliente: { nome, cognome, email }, biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto })) };
   mostraConferma(currentPrenotazioneId, currentQrCode, prenotazione, d);
   try {
-    await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-      cliente_nome: nome + ' ' + cognome, cliente_email: email,
-      spettacolo_titolo: currentSpettacolo.titolo,
-      spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
-      teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
-      posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
-      qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(currentQrCode)
-    });
+    await inviaEmailBiglietti(nome, cognome, email, d, currentQrCode);
     toast('Biglietto inviato via email a ' + email);
   } catch(e) { console.warn('Email non inviata:', e); }
 }
@@ -812,7 +822,8 @@ async function confermaPrenotazione() {
       const prenotazione = {
         spettacolo_id: currentSpettacolo.id,
         cliente: { nome, cognome, email, telefono },
-        biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto, importo: 0 })),
+        biglietti: postiSelezionati.map((p, i) => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto, importo: 0, qr_code: codiceBiglietto(qrCode, i), utilizzato: false })),
+        qr_codici: postiSelezionati.map((p, i) => codiceBiglietto(qrCode, i)),
         importo_totale: 0, metodo_pagamento: 'gratuito',
         pagamento: { provider_id: '', stato: 'completato', data: firebase.firestore.Timestamp.now() },
         qr_code: qrCode, canale: 'online', stato: 'confermata',
@@ -822,14 +833,7 @@ async function confermaPrenotazione() {
       if (timerInterval) clearInterval(timerInterval);
       mostraConferma(ref.id, qrCode, prenotazione, d);
       try {
-        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-          cliente_nome: nome + ' ' + cognome, cliente_email: email,
-          spettacolo_titolo: currentSpettacolo.titolo,
-          spettacolo_data: d.toLocaleDateString('it',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) + ' ore ' + d.toLocaleTimeString('it',{hour:'2-digit',minute:'2-digit'}),
-          teatro_nome: currentTeatro.nome + ' — ' + currentTeatro.citta,
-          posti: postiSelezionati.map(p => 'Fila ' + p.fila + ' Posto ' + p.posto).join(', '),
-          qr_url: 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qrCode)
-        });
+        await inviaEmailBiglietti(nome, cognome, email, d, qrCode);
         toast('Biglietto inviato via email a ' + email);
       } catch(e) { toast('Prenotazione confermata. Email non inviata.', 'error'); }
     } catch(e) { toast('Errore: ' + e.message, 'error'); }
@@ -841,7 +845,8 @@ async function confermaPrenotazione() {
       const ref = await db.collection('prenotazioni').add({
         spettacolo_id: currentSpettacolo.id,
         cliente: { nome, cognome, email, telefono },
-        biglietti: postiSelezionati.map(p => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto, importo: currentImportoTotale / postiSelezionati.length })),
+        biglietti: postiSelezionati.map((p, i) => ({ settore_id: p.settore_id, fila: p.fila, posto: p.posto, importo: currentImportoTotale / postiSelezionati.length, qr_code: codiceBiglietto(qrCode, i), utilizzato: false })),
+        qr_codici: postiSelezionati.map((p, i) => codiceBiglietto(qrCode, i)),
         importo_totale: currentImportoTotale, metodo_pagamento: 'in_attesa',
         pagamento: { provider_id: '', stato: 'in_attesa', data: firebase.firestore.Timestamp.now() },
         qr_code: qrCode, canale: 'online', stato: 'prenotata',
@@ -864,10 +869,28 @@ async function confermaPrenotazione() {
 
 function mostraConferma(docId, qrCode, prenotazione, dataSpettacolo) {
   goToStep(5);
-  document.getElementById('conf-sub').innerHTML = 'Il tuo biglietto è stato inviato a <strong>' + prenotazione.cliente.email + '</strong>.<br>Mostra il QR code all\'ingresso.';
-  document.getElementById('qr-code').innerHTML = '';
-  new QRCode(document.getElementById('qr-code'), { text: qrCode, width: 200, height: 200, colorDark: '#0A0A0A', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
-  document.getElementById('conf-id').textContent = 'Codice: ' + qrCode;
+  const n = prenotazione.biglietti.length;
+  document.getElementById('conf-sub').innerHTML = (n > 1 ? 'I tuoi <strong>' + n + ' biglietti</strong> sono stati inviati' : 'Il tuo biglietto è stato inviato') + ' a <strong>' + prenotazione.cliente.email + '</strong>.<br>' +
+    (n > 1 ? 'Ogni biglietto ha un QR personale: puoi inoltrarlo a chi lo userà, anche per arrivare in momenti diversi.' : 'Mostra il QR code all\'ingresso.');
+  const box = document.getElementById('qr-code');
+  box.innerHTML = '';
+  prenotazione.biglietti.forEach((bg, i) => {
+    const code = codiceBiglietto(qrCode, i);
+    const card = document.createElement('div');
+    card.style.cssText = 'margin:0 auto 20px;text-align:center';
+    const qr = document.createElement('div');
+    qr.style.cssText = 'display:inline-block';
+    const lab = document.createElement('div');
+    lab.style.cssText = 'font-size:13px;margin-top:8px';
+    lab.textContent = 'Fila ' + bg.fila + ' · Posto ' + bg.posto + (n > 1 ? '  (' + (i + 1) + ' di ' + n + ')' : '');
+    const cod = document.createElement('div');
+    cod.style.cssText = 'font-size:10px;color:#888;margin-top:2px';
+    cod.textContent = code;
+    card.appendChild(qr); card.appendChild(lab); card.appendChild(cod);
+    box.appendChild(card);
+    new QRCode(qr, { text: code, width: 200, height: 200, colorDark: '#0A0A0A', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+  });
+  document.getElementById('conf-id').textContent = (n > 1 ? n + ' biglietti · ' : '') + 'Codice prenotazione: ' + qrCode;
   const postiStr = prenotazione.biglietti.map(b => 'Fila ' + b.fila + ' Posto ' + b.posto).join(', ');
   document.getElementById('conf-dettagli').innerHTML = `
     <div class="dettaglio-row"><span class="dettaglio-key">Spettacolo</span><span class="dettaglio-val">${currentSpettacolo.titolo}</span></div>
