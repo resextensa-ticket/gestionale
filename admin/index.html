@@ -1002,7 +1002,7 @@
     <div class="page-title" id="page-title">Dashboard <span>/ Panoramica</span></div>
     <div style="display:flex;align-items:center;gap:14px">
       <div class="topbar-actions" id="topbar-actions"></div>
-      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.6</div>
+      <div style="font-family:DM Mono,monospace;font-size:9px;letter-spacing:0.15em;color:var(--testo-light);background:rgba(200,169,126,0.1);border:1px solid var(--bordo);padding:4px 10px;white-space:nowrap">v 1.7</div>
     </div>
   </div>
 
@@ -1190,6 +1190,22 @@
     <div class="view" id="view-scanner">
       <div style="max-width:520px; margin: 0 auto; padding-top: 20px;">
 
+        <!-- SPETTACOLO + CONTATORE -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><div class="card-title">🎭 Controllo ingressi</div></div>
+          <div style="padding:0 24px 20px;">
+            <div class="form-group" style="margin-bottom:12px">
+              <label>Spettacolo da controllare</label>
+              <select id="scanner-spettacolo" onchange="scannerCambiaSpettacolo(this.value)"></select>
+              <div class="form-hint">Un biglietto di un altro spettacolo o di un'altra sera verrà rifiutato</div>
+            </div>
+            <div id="scanner-counter" style="text-align:center;font-size:13px;color:var(--testo-light)">—</div>
+          </div>
+        </div>
+
+        <!-- ESITO ULTIMA SCANSIONE -->
+        <div id="scanner-result" style="margin-bottom:16px; display:none"></div>
+
         <!-- CAMERA SCANNER -->
         <div class="card" style="margin-bottom:16px;">
           <div class="card-header">
@@ -1230,7 +1246,20 @@
           </div>
         </div>
 
-        <div id="scanner-result" style="margin-top: 16px; display:none"></div>
+        <!-- CERCA PER NOME -->
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header"><div class="card-title">🔎 Cerca per nome (QR non leggibile)</div></div>
+          <div style="padding:0 24px 24px;">
+            <input type="text" id="scanner-cerca" placeholder="Cognome, nome, email o telefono..." autocomplete="off" oninput="scannerCerca()">
+            <div id="scanner-cerca-risultati" style="margin-top:10px"></div>
+          </div>
+        </div>
+
+        <!-- ULTIMI INGRESSI (questo dispositivo) -->
+        <div class="card" style="margin-top:16px;">
+          <div class="card-header"><div class="card-title">Ultime scansioni</div></div>
+          <div style="padding:0 24px 20px;" id="scanner-recenti"><div style="font-size:11px;color:var(--testo-light)">Nessuna scansione</div></div>
+        </div>
       </div>
     </div>
 
@@ -1622,6 +1651,7 @@ function loadTeatri() {
   db.collection('teatri').orderBy('nome').onSnapshot(snap => {
     teatri = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderTeatri();
+    populateScannerSpettacoli();
     populateTeatriSelects();
     updateDashboard();
   });
@@ -1633,6 +1663,7 @@ function loadSpettacoli() {
     renderSpettacoli();
     updateDashboard();
     populateSpettacoliFilter();
+    populateScannerSpettacoli();
   });
 }
 
@@ -1641,6 +1672,8 @@ function loadPrenotazioni() {
     prenotazioni = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     renderPrenotazioni();
     updateDashboard();
+    aggiornaContatoreIngressi();
+    scannerCerca();
   });
 }
 
@@ -2295,45 +2328,164 @@ function openModalUtente() {
 // ══════════════════════════════════════════
 // SCANNER QR
 // ══════════════════════════════════════════
-async function validaQR() {
-  const codice = document.getElementById('scanner-input').value.trim();
-  const result = document.getElementById('scanner-result');
-  if (!codice) return;
-  result.style.display = 'block';
-  result.innerHTML = `<div style="padding:16px;text-align:center;color:var(--testo-light)">Verifica in corso...</div>`;
+let scannerSpettacoloId = '';
+let scannerBusy = false;
+let scannerCooldownUntil = 0;
+let scannerUltimoCodice = '';
+let scannerUltimoCodiceTs = 0;
+let scannerRecenti = [];
+let scannerAudioCtx = null;
 
+function scEsc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function scannerCambiaSpettacolo(id) {
+  scannerSpettacoloId = id || '';
+  aggiornaContatoreIngressi();
+  scannerCerca();
+}
+
+function populateScannerSpettacoli() {
+  const sel = document.getElementById('scanner-spettacolo');
+  if (!sel) return;
+  const ruolo = currentUserData?.ruolo;
+  const tid = (ruolo === 'scanner' || ruolo === 'responsabile_teatro') && currentUserData?.teatro_id ? currentUserData.teatro_id : null;
+  const da = Date.now() - 12 * 3600 * 1000;
+  const a = Date.now() + 14 * 86400 * 1000;
+  const lista = spettacoli.filter(s => {
+    const t = s.data_ora && s.data_ora.toDate ? s.data_ora.toDate().getTime() : 0;
+    return t >= da && t <= a && (!tid || s.teatro_id === tid);
+  });
+  const prev = scannerSpettacoloId;
+  sel.innerHTML = '<option value="">— Seleziona lo spettacolo —</option>' + lista.map(s => {
+    const d = s.data_ora.toDate();
+    const te = teatri.find(t => t.id === s.teatro_id);
+    return '<option value="' + scEsc(s.id) + '">' +
+      scEsc(d.toLocaleDateString('it', {day:'2-digit', month:'2-digit'}) + ' ' + d.toLocaleTimeString('it', {hour:'2-digit', minute:'2-digit'}) + ' · ' + (s.titolo || '') + (te ? ' · ' + te.nome : '')) +
+      '</option>';
+  }).join('');
+  scannerSpettacoloId = lista.some(s => s.id === prev) ? prev : (lista[0] ? lista[0].id : '');
+  sel.value = scannerSpettacoloId;
+  aggiornaContatoreIngressi();
+}
+
+function aggiornaContatoreIngressi() {
+  const el = document.getElementById('scanner-counter');
+  if (!el) return;
+  if (!scannerSpettacoloId) { el.textContent = 'Nessuno spettacolo selezionato'; return; }
+  const validi = prenotazioni.filter(p => p.spettacolo_id === scannerSpettacoloId && ['confermata', 'assegnata', 'utilizzata'].includes(p.stato));
+  const conta = list => list.reduce((n, p) => n + (p.biglietti || []).length, 0);
+  const tot = conta(validi);
+  const entrati = conta(validi.filter(p => p.stato === 'utilizzata'));
+  el.innerHTML = '<span style="font-size:34px;color:var(--testo);font-weight:500">' + entrati + '</span> <span style="font-size:18px">/ ' + tot + '</span><div style="font-size:10px;letter-spacing:0.12em;text-transform:uppercase;margin-top:4px">persone entrate</div>';
+}
+
+function scannerFeedback(tipo) {
+  try { if (navigator.vibrate) navigator.vibrate(tipo === 'ok' ? 80 : [120, 60, 120]); } catch (e) {}
   try {
-    const snap = await db.collection('prenotazioni').where('qr_code', '==', codice).get();
-    if (snap.empty) {
-      result.innerHTML = `<div style="padding:16px;background:rgba(192,57,43,0.08);border:1px solid var(--errore);color:var(--errore)">✕ Biglietto non trovato</div>`;
-      return;
-    }
-    const doc = snap.docs[0];
-    const p = doc.data();
-    const sp = spettacoli.find(s => s.id === p.spettacolo_id);
-    const posti = (p.biglietti || []).map(b => `Fila ${b.fila} Posto ${b.posto}`).join(', ');
+    if (!scannerAudioCtx) scannerAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const c = scannerAudioCtx, o = c.createOscillator(), g = c.createGain();
+    o.connect(g); g.connect(c.destination);
+    o.frequency.value = tipo === 'ok' ? 880 : 220;
+    g.gain.value = 0.08;
+    o.start(); o.stop(c.currentTime + (tipo === 'ok' ? 0.12 : 0.4));
+  } catch (e) {}
+}
 
-    if (p.stato === 'utilizzata') {
-      result.innerHTML = `<div style="padding:16px;background:rgba(192,57,43,0.08);border:1px solid var(--errore);color:var(--errore)">⚠ Biglietto già utilizzato</div>`;
-      return;
-    }
-    if (p.stato === 'annullata') {
-      result.innerHTML = `<div style="padding:16px;background:rgba(192,57,43,0.08);border:1px solid var(--errore);color:var(--errore)">✕ Prenotazione annullata</div>`;
-      return;
-    }
+function mostraEsitoScanner(tipo, titolo, dettaglio, nome, posti) {
+  const col = tipo === 'ok' ? {bg:'rgba(39,174,96,0.12)', bd:'var(--successo)', fg:'var(--successo)', ic:'✓'}
+            : tipo === 'warn' ? {bg:'rgba(230,126,34,0.12)', bd:'#E67E22', fg:'#C0661A', ic:'⚠'}
+            : {bg:'rgba(192,57,43,0.10)', bd:'var(--errore)', fg:'var(--errore)', ic:'✕'};
+  const result = document.getElementById('scanner-result');
+  result.style.display = 'block';
+  result.innerHTML = '<div style="padding:20px;background:' + col.bg + ';border:2px solid ' + col.bd + ';text-align:center">' +
+    '<div style="font-size:34px;line-height:1;color:' + col.fg + '">' + col.ic + '</div>' +
+    '<div style="font-size:16px;color:' + col.fg + ';margin-top:8px;font-weight:500">' + scEsc(titolo) + '</div>' +
+    (nome ? '<div style="font-size:14px;color:var(--testo);margin-top:10px">' + scEsc(nome) + '</div>' : '') +
+    (posti ? '<div style="font-size:12px;color:var(--testo);margin-top:4px">' + scEsc(posti) + '</div>' : '') +
+    (dettaglio ? '<div style="font-size:11px;color:var(--testo-light);margin-top:8px">' + scEsc(dettaglio) + '</div>' : '') +
+    '</div>';
+  scannerFeedback(tipo);
+  const ora = new Date().toLocaleTimeString('it', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  scannerRecenti.unshift({ ora, tipo, titolo, nome: nome || '' });
+  scannerRecenti = scannerRecenti.slice(0, 10);
+  const box = document.getElementById('scanner-recenti');
+  if (box) box.innerHTML = scannerRecenti.map(r =>
+    '<div style="display:flex;gap:10px;font-size:11px;padding:6px 0;border-bottom:1px solid var(--bordo)">' +
+    '<span style="color:var(--testo-light);min-width:58px">' + r.ora + '</span>' +
+    '<span style="min-width:14px;color:' + (r.tipo === 'ok' ? 'var(--successo)' : r.tipo === 'warn' ? '#C0661A' : 'var(--errore)') + '">' + (r.tipo === 'ok' ? '✓' : r.tipo === 'warn' ? '⚠' : '✕') + '</span>' +
+    '<span>' + scEsc(r.nome || r.titolo) + '</span></div>').join('');
+}
 
-    await db.collection('prenotazioni').doc(doc.id).update({ stato: 'utilizzata' });
-    result.innerHTML = `
-      <div style="padding:16px;background:rgba(39,174,96,0.08);border:1px solid var(--successo)">
-        <div style="color:var(--successo);font-size:13px;margin-bottom:8px">✓ Biglietto valido — accesso consentito</div>
-        <div style="font-size:11px;color:var(--testo)">${p.cliente?.nome} ${p.cliente?.cognome}</div>
-        <div style="font-size:10px;color:var(--testo-light);margin-top:4px">${sp ? sp.titolo : '—'} · ${posti}</div>
-      </div>
-    `;
-    document.getElementById('scanner-input').value = '';
-  } catch(e) {
-    result.innerHTML = `<div style="padding:16px;background:rgba(192,57,43,0.08);border:1px solid var(--errore);color:var(--errore)">Errore: ${e.message}</div>`;
+async function validaQR(codiceDaCamera) {
+  const input = document.getElementById('scanner-input');
+  const codice = (typeof codiceDaCamera === 'string' ? codiceDaCamera : input.value).trim();
+  if (!codice || scannerBusy) return;
+  if (!scannerSpettacoloId) { mostraEsitoScanner('err', 'Seleziona prima lo spettacolo', ''); return; }
+  scannerBusy = true;
+  try {
+    const snap = await db.collection('prenotazioni').where('qr_code', '==', codice).limit(1).get();
+    if (snap.empty) { mostraEsitoScanner('err', 'Biglietto non trovato', 'Codice non riconosciuto'); return; }
+    const ref = snap.docs[0].ref;
+    const esito = await db.runTransaction(async tx => {
+      const d = await tx.get(ref);
+      const p = d.data();
+      const nome = ((p.cliente && p.cliente.nome) || '') + ' ' + ((p.cliente && p.cliente.cognome) || '');
+      const bigl = p.biglietti || [];
+      const posti = bigl.map(b => 'Fila ' + b.fila + ' posto ' + b.posto).join(' · ');
+      const persone = bigl.length + (bigl.length === 1 ? ' persona' : ' persone');
+      if (p.spettacolo_id !== scannerSpettacoloId) {
+        const altro = spettacoli.find(x => x.id === p.spettacolo_id);
+        const dett = altro ? 'Biglietto per: ' + altro.titolo + (altro.data_ora && altro.data_ora.toDate ? ' · ' + altro.data_ora.toDate().toLocaleDateString('it', {day:'2-digit', month:'2-digit'}) + ' ' + altro.data_ora.toDate().toLocaleTimeString('it', {hour:'2-digit', minute:'2-digit'}) : '') : 'Biglietto per un altro spettacolo';
+        return { tipo: 'err', titolo: 'SPETTACOLO DIVERSO', dettaglio: dett, nome, posti };
+      }
+      if (p.stato === 'utilizzata') {
+        let quando = '';
+        if (p.validato_il && p.validato_il.toDate) quando = 'Già validato alle ' + p.validato_il.toDate().toLocaleTimeString('it', {hour:'2-digit', minute:'2-digit'}) + (p.validato_da ? ' da ' + p.validato_da : '');
+        return { tipo: 'warn', titolo: 'GIÀ UTILIZZATO', dettaglio: quando, nome, posti };
+      }
+      if (p.stato === 'annullata') return { tipo: 'err', titolo: 'PRENOTAZIONE ANNULLATA', dettaglio: '', nome, posti };
+      if (p.stato === 'prenotata') return { tipo: 'err', titolo: 'PAGAMENTO NON COMPLETATO', dettaglio: 'Prenotazione in attesa di pagamento: non ammettere', nome, posti };
+      if (p.stato !== 'confermata' && p.stato !== 'assegnata') return { tipo: 'err', titolo: 'BIGLIETTO NON VALIDO', dettaglio: 'Stato: ' + p.stato, nome, posti };
+      tx.update(ref, {
+        stato: 'utilizzata',
+        validato_il: firebase.firestore.FieldValue.serverTimestamp(),
+        validato_da: (currentUser && currentUser.email) || '',
+        validato_da_uid: (currentUser && currentUser.uid) || ''
+      });
+      return { tipo: 'ok', titolo: 'ACCESSO CONSENTITO', dettaglio: persone, nome, posti };
+    });
+    mostraEsitoScanner(esito.tipo, esito.titolo, esito.dettaglio, esito.nome.trim(), esito.posti);
+    if (esito.tipo === 'ok') input.value = '';
+  } catch (e) {
+    mostraEsitoScanner('err', 'Errore di verifica', e.message);
+  } finally {
+    scannerBusy = false;
+    scannerCooldownUntil = Date.now() + 2500;
   }
+}
+
+function scannerCerca() {
+  const box = document.getElementById('scanner-cerca-risultati');
+  const inp = document.getElementById('scanner-cerca');
+  if (!box || !inp) return;
+  const q = inp.value.trim().toLowerCase();
+  if (q.length < 2 || !scannerSpettacoloId) { box.innerHTML = ''; return; }
+  const trovati = prenotazioni.filter(p =>
+    p.spettacolo_id === scannerSpettacoloId && ['confermata', 'assegnata', 'utilizzata'].includes(p.stato) &&
+    ((p.cliente?.nome || '') + ' ' + (p.cliente?.cognome || '') + ' ' + (p.cliente?.email || '') + ' ' + (p.cliente?.telefono || '')).toLowerCase().includes(q)
+  ).slice(0, 8);
+  if (!trovati.length) { box.innerHTML = '<div style="font-size:11px;color:var(--testo-light)">Nessuna prenotazione valida trovata</div>'; return; }
+  box.innerHTML = trovati.map(p => {
+    const posti = (p.biglietti || []).map(b => b.fila + b.posto).join(', ');
+    const gia = p.stato === 'utilizzata';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bordo)">' +
+      '<div style="font-size:12px"><div>' + scEsc((p.cliente?.nome || '') + ' ' + (p.cliente?.cognome || '')) + '</div>' +
+      '<div style="font-size:10px;color:var(--testo-light)">' + scEsc(posti) + (gia ? ' · già entrato' : '') + '</div></div>' +
+      (gia || !p.qr_code ? '' : '<button class="btn btn-primary" style="font-size:10px;padding:6px 12px" data-codice="' + scEsc(p.qr_code) + '" onclick="validaQR(this.dataset.codice)">Ammetti</button>') +
+      '</div>';
+  }).join('');
 }
 
 document.getElementById('scanner-input').addEventListener('keydown', e => {
@@ -2390,9 +2542,12 @@ function scanFrame() {
   if (window.jsQR) {
     const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
     if (code && code.data) {
-      stopCamera();
-      document.getElementById('scanner-input').value = code.data;
-      validaQR();
+      const ora = Date.now();
+      if (scannerBusy || ora < scannerCooldownUntil) return;
+      if (code.data === scannerUltimoCodice && ora - scannerUltimoCodiceTs < 5000) return;
+      scannerUltimoCodice = code.data;
+      scannerUltimoCodiceTs = ora;
+      validaQR(code.data);
     }
   }
 }
